@@ -3,9 +3,21 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 export type ShiftType = "M" | "T" | "libre" | null;
 export type CalendarMode = "shifts" | "events";
 
+export type RecurrenceType = "none" | "daily" | "weekly" | "monthly" | "yearly";
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  description?: string;
+  time?: string;
+  date: string; // Original date
+  recurrence: RecurrenceType;
+}
+
 interface DayData {
   shift?: ShiftType;
   note?: string;
+  events?: CalendarEvent[];
 }
 
 interface Holiday {
@@ -28,6 +40,9 @@ interface CalendarContextType {
   days: Record<string, DayData>;
   setDayShift: (date: string, shift: ShiftType) => void;
   setDayNote: (date: string, note: string) => void;
+  addEvent: (event: CalendarEvent) => void;
+  deleteEvent: (eventId: string) => void;
+  getEventsForDate: (date: Date) => CalendarEvent[];
   config: CalendarConfig;
   updateConfig: (config: Partial<CalendarConfig>) => void;
   isHoliday: (date: Date) => Holiday | undefined;
@@ -98,6 +113,76 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return config.holidays.find((h) => h.date === dateStr);
   };
 
+  const addEvent = (event: CalendarEvent) => {
+    const dateStr = event.date;
+    setDays((prev) => ({
+      ...prev,
+      [dateStr]: {
+        ...prev[dateStr],
+        events: [...(prev[dateStr]?.events || []), event],
+      },
+    }));
+  };
+
+  const deleteEvent = (eventId: string) => {
+    setDays((prev) => {
+      const newDays = { ...prev };
+      Object.keys(newDays).forEach((dateStr) => {
+        if (newDays[dateStr].events) {
+          newDays[dateStr].events = newDays[dateStr].events!.filter(
+            (e) => e.id !== eventId
+          );
+        }
+      });
+      return newDays;
+    });
+  };
+
+  const getEventsForDate = (date: Date): CalendarEvent[] => {
+    const dateStr = date.toISOString().split("T")[0];
+    const allEvents: CalendarEvent[] = [];
+
+    // Get events from all days
+    Object.values(days).forEach((dayData) => {
+      dayData.events?.forEach((event) => {
+        if (eventMatchesDate(event, date)) {
+          allEvents.push(event);
+        }
+      });
+    });
+
+    return allEvents;
+  };
+
+  const eventMatchesDate = (event: CalendarEvent, targetDate: Date): boolean => {
+    const eventDate = new Date(event.date);
+    const targetDateStr = targetDate.toISOString().split("T")[0];
+    const eventDateStr = eventDate.toISOString().split("T")[0];
+
+    if (eventDateStr === targetDateStr) return true;
+
+    if (event.recurrence === "none") return false;
+
+    // Check if target date is after event date
+    if (targetDate < eventDate) return false;
+
+    switch (event.recurrence) {
+      case "daily":
+        return true;
+      case "weekly":
+        return eventDate.getDay() === targetDate.getDay();
+      case "monthly":
+        return eventDate.getDate() === targetDate.getDate();
+      case "yearly":
+        return (
+          eventDate.getDate() === targetDate.getDate() &&
+          eventDate.getMonth() === targetDate.getMonth()
+        );
+      default:
+        return false;
+    }
+  };
+
   return (
     <CalendarContext.Provider
       value={{
@@ -106,6 +191,9 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         days,
         setDayShift,
         setDayNote,
+        addEvent,
+        deleteEvent,
+        getEventsForDate,
         config,
         updateConfig,
         isHoliday,
