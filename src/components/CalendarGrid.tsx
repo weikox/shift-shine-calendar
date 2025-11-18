@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useCalendar } from "@/contexts/CalendarContext";
 import { ShiftDialog } from "./ShiftDialog";
+import { EventDialog } from "./EventDialog";
 import { cn } from "@/lib/utils";
 
 interface CalendarGridProps {
@@ -8,7 +9,7 @@ interface CalendarGridProps {
 }
 
 export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
-  const { days, isHoliday } = useCalendar();
+  const { mode, days, isHoliday, getEventsForDate } = useCalendar();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const getDaysInMonth = (date: Date) => {
@@ -95,6 +96,7 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
               const dayData = getDayData(date);
               const holiday = date ? isHoliday(date) : undefined;
               const weekend = isWeekend(date);
+              const events = date ? getEventsForDate(date) : [];
               
               return (
                 <div
@@ -121,7 +123,8 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
                         </span>
                       </div>
                       
-                      {dayData?.shift && (
+                      {/* Show shifts in shifts mode */}
+                      {mode === "shifts" && dayData?.shift && (
                         <div
                           className={cn(
                             "mt-auto px-2 py-1 rounded text-xs font-medium text-center",
@@ -129,6 +132,26 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
                           )}
                         >
                           {getShiftLabel(dayData.shift)}
+                        </div>
+                      )}
+
+                      {/* Show events in events mode */}
+                      {mode === "events" && events.length > 0 && (
+                        <div className="mt-1 space-y-1 flex-1 overflow-hidden">
+                          {events.slice(0, 3).map((event) => (
+                            <div
+                              key={event.id}
+                              className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary truncate"
+                            >
+                              {event.time && <span className="font-medium">{event.time} </span>}
+                              {event.title}
+                            </div>
+                          ))}
+                          {events.length > 3 && (
+                            <div className="text-xs text-muted-foreground">
+                              +{events.length - 3} más
+                            </div>
+                          )}
                         </div>
                       )}
                       
@@ -146,11 +169,19 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
         </div>
       </div>
 
-      <ShiftDialog
-        selectedDate={selectedDate}
-        open={selectedDate !== null}
-        onOpenChange={(open) => !open && setSelectedDate(null)}
-      />
+      {mode === "shifts" ? (
+        <ShiftDialog
+          selectedDate={selectedDate}
+          open={selectedDate !== null}
+          onOpenChange={(open) => !open && setSelectedDate(null)}
+        />
+      ) : (
+        <EventDialog
+          selectedDate={selectedDate}
+          open={selectedDate !== null}
+          onOpenChange={(open) => !open && setSelectedDate(null)}
+        />
+      )}
     </>
   );
 };
