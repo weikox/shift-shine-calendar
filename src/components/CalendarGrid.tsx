@@ -9,7 +9,7 @@ interface CalendarGridProps {
 }
 
 export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
-  const { mode, days, isHoliday, getEventsForDate } = useCalendar();
+  const { mode, days, isHoliday, getEventsForDate, config } = useCalendar();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const getDaysInMonth = (date: Date) => {
@@ -74,16 +74,27 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
   const daysArray = getDaysInMonth(currentDate);
   const weekDays = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
+  const getCellHeight = () => {
+    switch (config.cellSize) {
+      case "small":
+        return "min-h-[80px]";
+      case "large":
+        return "min-h-[140px]";
+      default:
+        return "min-h-[100px]";
+    }
+  };
+
   return (
     <>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4 sm:py-6">
         <div className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
           {/* Week days header */}
           <div className="grid grid-cols-7 bg-secondary border-b border-border">
             {weekDays.map((day) => (
               <div
                 key={day}
-                className="py-3 text-center text-sm font-semibold text-secondary-foreground"
+                className="py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-secondary-foreground"
               >
                 {day}
               </div>
@@ -103,7 +114,8 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
                   key={index}
                   onClick={() => handleDayClick(date)}
                   className={cn(
-                    "min-h-[100px] p-2 border-r border-b border-border transition-colors",
+                    getCellHeight(),
+                    "p-1.5 sm:p-2 border-r border-b border-border transition-colors",
                     date && "cursor-pointer hover:bg-secondary/50",
                     !date && "bg-muted",
                     weekend && date && "bg-weekend",
