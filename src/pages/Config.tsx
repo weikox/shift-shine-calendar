@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ArrowLeft, Plus, Trash2, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { EventsManager } from "@/components/EventsManager";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import * as XLSX from "xlsx";
 
 const Config = () => {
   const navigate = useNavigate();
@@ -39,31 +41,93 @@ const Config = () => {
     toast.success("Festivo eliminado");
   };
 
-  const handleExportData = () => {
-    const data = exportData();
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `calendario-backup-${new Date().toISOString().split("T")[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success("Datos exportados correctamente");
+  const handleExportData = (format: "json" | "csv" | "excel") => {
+    const timestamp = new Date().toISOString().split("T")[0];
+
+    if (format === "json") {
+      const data = exportData();
+      const blob = new Blob([data], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `calendario-backup-${timestamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Datos exportados en JSON");
+    } else if (format === "csv" || format === "excel") {
+      // Prepare data for spreadsheet
+      const data = JSON.parse(exportData());
+      const rows: any[] = [];
+
+      // Export days with shifts and notes
+      Object.entries(data.days).forEach(([date, dayData]: [string, any]) => {
+        rows.push({
+          Fecha: date,
+          Turno: dayData.shift || "",
+          Nota: dayData.note || "",
+        });
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Calendario");
+
+      if (format === "csv") {
+        XLSX.writeFile(wb, `calendario-backup-${timestamp}.csv`);
+        toast.success("Datos exportados en CSV");
+      } else {
+        XLSX.writeFile(wb, `calendario-backup-${timestamp}.xlsx`);
+        toast.success("Datos exportados en Excel");
+      }
+    }
   };
 
   const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      importData(content);
-    };
-    reader.readAsText(file);
-    
+    const fileExtension = file.name.split(".").pop()?.toLowerCase();
+
+    if (fileExtension === "json") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        importData(content);
+      };
+      reader.readAsText(file);
+    } else if (fileExtension === "csv" || fileExtension === "xlsx") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+          // Convert spreadsheet data to calendar format
+          const days: Record<string, any> = {};
+          jsonData.forEach((row: any) => {
+            if (row.Fecha) {
+              days[row.Fecha] = {
+                shift: row.Turno || undefined,
+                note: row.Nota || undefined,
+              };
+            }
+          });
+
+          importData(JSON.stringify({ days, config }));
+        } catch (error) {
+          toast.error("Error al importar archivo Excel/CSV");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      toast.error("Formato de archivo no soportado");
+    }
+
     // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -90,38 +154,86 @@ const Config = () => {
         {/* Events Manager */}
         <EventsManager />
 
+        {/* Display Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Ajustes de Visualización</CardTitle>
+            <CardDescription>
+              Personaliza el tamaño de las celdas del calendario si el ajuste automático no es óptimo
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="cell-size">Tamaño de celdas</Label>
+              <Select
+                value={config.cellSize}
+                onValueChange={(value: "small" | "medium" | "large") =>
+                  updateConfig({ cellSize: value })
+                }
+              >
+                <SelectTrigger id="cell-size">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="small">Pequeño</SelectItem>
+                  <SelectItem value="medium">Medio (recomendado)</SelectItem>
+                  <SelectItem value="large">Grande</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Ajusta la altura de las celdas del calendario según tus preferencias
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Import/Export */}
         <Card>
           <CardHeader>
             <CardTitle>Importar / Exportar</CardTitle>
             <CardDescription>
-              Guarda una copia de seguridad de tus datos o importa datos previamente exportados
+              Guarda una copia de seguridad de tus datos en diferentes formatos o importa datos previamente exportados
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Button onClick={handleExportData} variant="outline" className="w-full">
-                <Download className="mr-2 h-4 w-4" />
-                Exportar datos
-              </Button>
-              <div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".json"
-                  onChange={handleImportData}
-                  className="hidden"
-                  id="import-file"
-                />
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Importar datos
+            <div className="space-y-3">
+              <Label>Exportar datos</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <Button onClick={() => handleExportData("json")} variant="outline" className="w-full">
+                  <Download className="mr-2 h-4 w-4" />
+                  JSON
+                </Button>
+                <Button onClick={() => handleExportData("csv")} variant="outline" className="w-full">
+                  <Download className="mr-2 h-4 w-4" />
+                  CSV
+                </Button>
+                <Button onClick={() => handleExportData("excel")} variant="outline" className="w-full">
+                  <Download className="mr-2 h-4 w-4" />
+                  Excel
                 </Button>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Importar datos</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,.csv,.xlsx"
+                className="hidden"
+                onChange={handleImportData}
+                id="import-file"
+              />
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                variant="outline"
+                className="w-full"
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Importar datos (JSON, CSV o Excel)
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Soporta archivos .json, .csv y .xlsx
+              </p>
             </div>
           </CardContent>
         </Card>

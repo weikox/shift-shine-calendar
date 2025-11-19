@@ -34,6 +34,7 @@ interface CalendarConfig {
     afternoon: string;
     dayOff: string;
   };
+  cellSize: "small" | "medium" | "large";
 }
 
 interface CalendarContextType {
@@ -75,6 +76,7 @@ const defaultConfig: CalendarConfig = {
     afternoon: "hsl(var(--shift-afternoon))",
     dayOff: "hsl(var(--day-off))",
   },
+  cellSize: "medium",
 };
 
 export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
