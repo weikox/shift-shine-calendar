@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { toast } from "sonner";
 
 export type ShiftType = "M" | "T" | "libre" | null;
 export type CalendarMode = "shifts" | "events";
@@ -12,6 +13,7 @@ export interface CalendarEvent {
   time?: string;
   date: string; // Original date
   recurrence: RecurrenceType;
+  reminderMinutes?: number; // Prerecordatorio en minutos
 }
 
 interface DayData {
@@ -41,11 +43,15 @@ interface CalendarContextType {
   setDayShift: (date: string, shift: ShiftType) => void;
   setDayNote: (date: string, note: string) => void;
   addEvent: (event: CalendarEvent) => void;
+  updateEvent: (eventId: string, updatedEvent: Partial<CalendarEvent>) => void;
   deleteEvent: (eventId: string) => void;
+  getAllEvents: () => CalendarEvent[];
   getEventsForDate: (date: Date) => CalendarEvent[];
   config: CalendarConfig;
   updateConfig: (config: Partial<CalendarConfig>) => void;
   isHoliday: (date: Date) => Holiday | undefined;
+  exportData: () => string;
+  importData: (jsonData: string) => void;
 }
 
 const CalendarContext = createContext<CalendarContextType | undefined>(undefined);
@@ -124,6 +130,20 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }));
   };
 
+  const updateEvent = (eventId: string, updatedEvent: Partial<CalendarEvent>) => {
+    setDays((prev) => {
+      const newDays = { ...prev };
+      Object.keys(newDays).forEach((dateStr) => {
+        if (newDays[dateStr].events) {
+          newDays[dateStr].events = newDays[dateStr].events!.map((e) =>
+            e.id === eventId ? { ...e, ...updatedEvent } : e
+          );
+        }
+      });
+      return newDays;
+    });
+  };
+
   const deleteEvent = (eventId: string) => {
     setDays((prev) => {
       const newDays = { ...prev };
@@ -136,6 +156,31 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
       return newDays;
     });
+  };
+
+  const getAllEvents = (): CalendarEvent[] => {
+    const allEvents: CalendarEvent[] = [];
+    Object.values(days).forEach((dayData) => {
+      if (dayData.events) {
+        allEvents.push(...dayData.events);
+      }
+    });
+    return allEvents;
+  };
+
+  const exportData = (): string => {
+    return JSON.stringify({ days, config }, null, 2);
+  };
+
+  const importData = (jsonData: string) => {
+    try {
+      const data = JSON.parse(jsonData);
+      if (data.days) setDays(data.days);
+      if (data.config) setConfig(data.config);
+      toast.success("Datos importados correctamente");
+    } catch (error) {
+      toast.error("Error al importar datos. Verifica el formato del archivo.");
+    }
   };
 
   const getEventsForDate = (date: Date): CalendarEvent[] => {
@@ -192,11 +237,15 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setDayShift,
         setDayNote,
         addEvent,
+        updateEvent,
         deleteEvent,
+        getAllEvents,
         getEventsForDate,
         config,
         updateConfig,
         isHoliday,
+        exportData,
+        importData,
       }}
     >
       {children}

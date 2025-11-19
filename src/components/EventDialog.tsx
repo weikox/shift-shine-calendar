@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useCalendar, CalendarEvent, RecurrenceType } from "@/contexts/CalendarContext";
 import {
   Dialog,
@@ -21,36 +21,67 @@ interface EventDialogProps {
 }
 
 export const EventDialog = ({ selectedDate, open, onOpenChange }: EventDialogProps) => {
-  const { getEventsForDate, addEvent, deleteEvent } = useCalendar();
+  const { getEventsForDate, addEvent, updateEvent, deleteEvent } = useCalendar();
   const [isAdding, setIsAdding] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [time, setTime] = useState("");
   const [recurrence, setRecurrence] = useState<RecurrenceType>("none");
+  const [reminderMinutes, setReminderMinutes] = useState<number>(0);
 
   if (!selectedDate) return null;
 
   const events = getEventsForDate(selectedDate);
   const dateStr = selectedDate.toISOString().split("T")[0];
 
-  const handleAddEvent = () => {
-    if (!title.trim()) return;
-
-    const newEvent: CalendarEvent = {
-      id: `${Date.now()}-${Math.random()}`,
-      title: title.trim(),
-      description: description.trim(),
-      time: time || undefined,
-      date: dateStr,
-      recurrence,
-    };
-
-    addEvent(newEvent);
+  const resetForm = () => {
     setTitle("");
     setDescription("");
     setTime("");
     setRecurrence("none");
+    setReminderMinutes(0);
     setIsAdding(false);
+    setEditingEventId(null);
+  };
+
+  const handleSaveEvent = () => {
+    if (!title.trim()) return;
+
+    if (editingEventId) {
+      // Update existing event
+      updateEvent(editingEventId, {
+        title: title.trim(),
+        description: description.trim(),
+        time: time || undefined,
+        recurrence,
+        reminderMinutes: reminderMinutes > 0 ? reminderMinutes : undefined,
+      });
+    } else {
+      // Add new event
+      const newEvent: CalendarEvent = {
+        id: `${Date.now()}-${Math.random()}`,
+        title: title.trim(),
+        description: description.trim(),
+        time: time || undefined,
+        date: dateStr,
+        recurrence,
+        reminderMinutes: reminderMinutes > 0 ? reminderMinutes : undefined,
+      };
+      addEvent(newEvent);
+    }
+    
+    resetForm();
+  };
+
+  const handleEditEvent = (event: CalendarEvent) => {
+    setEditingEventId(event.id);
+    setTitle(event.title);
+    setDescription(event.description || "");
+    setTime(event.time || "");
+    setRecurrence(event.recurrence);
+    setReminderMinutes(event.reminderMinutes || 0);
+    setIsAdding(true);
   };
 
   const handleDeleteEvent = (eventId: string) => {
@@ -69,11 +100,7 @@ export const EventDialog = ({ selectedDate, open, onOpenChange }: EventDialogPro
     <Dialog open={open} onOpenChange={(open) => {
       onOpenChange(open);
       if (!open) {
-        setIsAdding(false);
-        setTitle("");
-        setDescription("");
-        setTime("");
-        setRecurrence("none");
+        resetForm();
       }
     }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh]">
@@ -116,23 +143,36 @@ export const EventDialog = ({ selectedDate, open, onOpenChange }: EventDialogPro
                           </p>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => handleDeleteEvent(event.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                       <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleEditEvent(event)}
+                        >
+                          <span className="text-sm">✏️</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteEvent(event.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* Add event form */}
+            {/* Add/Edit event form */}
             {isAdding ? (
               <div className="space-y-4 p-4 rounded-lg border border-border bg-secondary/30">
+                <h3 className="font-medium text-sm">
+                  {editingEventId ? "Editar evento" : "Añadir evento"}
+                </h3>
                 <div className="space-y-2">
                   <Label htmlFor="title">Título *</Label>
                   <Input
@@ -180,23 +220,37 @@ export const EventDialog = ({ selectedDate, open, onOpenChange }: EventDialogPro
                   </Select>
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="reminder">Prerecordatorio</Label>
+                  <Select 
+                    value={reminderMinutes.toString()} 
+                    onValueChange={(value) => setReminderMinutes(parseInt(value))}
+                  >
+                    <SelectTrigger id="reminder">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Sin recordatorio</SelectItem>
+                      <SelectItem value="5">5 minutos antes</SelectItem>
+                      <SelectItem value="15">15 minutos antes</SelectItem>
+                      <SelectItem value="30">30 minutos antes</SelectItem>
+                      <SelectItem value="60">1 hora antes</SelectItem>
+                      <SelectItem value="1440">1 día antes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="flex gap-2">
                   <Button
-                    onClick={handleAddEvent}
+                    onClick={handleSaveEvent}
                     disabled={!title.trim()}
                     className="flex-1"
                   >
-                    Guardar evento
+                    {editingEventId ? "Actualizar evento" : "Guardar evento"}
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setIsAdding(false);
-                      setTitle("");
-                      setDescription("");
-                      setTime("");
-                      setRecurrence("none");
-                    }}
+                    onClick={resetForm}
                   >
                     Cancelar
                   </Button>

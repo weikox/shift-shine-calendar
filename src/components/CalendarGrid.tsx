@@ -76,7 +76,7 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
 
   return (
     <>
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
         <div className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
           {/* Week days header */}
           <div className="grid grid-cols-7 bg-secondary border-b border-border">

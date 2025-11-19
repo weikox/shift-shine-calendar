@@ -1,18 +1,20 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCalendar } from "@/contexts/CalendarContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { EventsManager } from "@/components/EventsManager";
 
 const Config = () => {
   const navigate = useNavigate();
-  const { config, updateConfig } = useCalendar();
+  const { config, updateConfig, exportData, importData } = useCalendar();
   const [newHolidayDate, setNewHolidayDate] = useState("");
   const [newHolidayName, setNewHolidayName] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddHoliday = () => {
     if (!newHolidayDate || !newHolidayName) {
@@ -37,6 +39,37 @@ const Config = () => {
     toast.success("Festivo eliminado");
   };
 
+  const handleExportData = () => {
+    const data = exportData();
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `calendario-backup-${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Datos exportados correctamente");
+  };
+
+  const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      importData(content);
+    };
+    reader.readAsText(file);
+    
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border px-6 py-4">
@@ -53,7 +86,47 @@ const Config = () => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
+      <main className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+        {/* Events Manager */}
+        <EventsManager />
+
+        {/* Import/Export */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Importar / Exportar</CardTitle>
+            <CardDescription>
+              Guarda una copia de seguridad de tus datos o importa datos previamente exportados
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Button onClick={handleExportData} variant="outline" className="w-full">
+                <Download className="mr-2 h-4 w-4" />
+                Exportar datos
+              </Button>
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportData}
+                  className="hidden"
+                  id="import-file"
+                />
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Importar datos
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Holidays */}
         <Card>
           <CardHeader>
             <CardTitle>Festivos</CardTitle>
