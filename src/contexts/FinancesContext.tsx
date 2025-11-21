@@ -50,6 +50,11 @@ interface FinancesContextType {
   getTransactionsByCategory: (category: Transaction['category']) => Transaction[];
   getAccountTransactions: (accountName: string) => Transaction[];
   updateAccountBalance: (accountName: string, newBalance: number) => void;
+  addAccount: (name: string) => void;
+  updateAccount: (oldName: string, newName: string) => void;
+  deleteAccount: (name: string) => void;
+  getTotalBalance: () => number;
+  getPendingTransactionsTotal: () => number;
 }
 
 const FinancesContext = createContext<FinancesContextType | undefined>(undefined);
@@ -253,6 +258,73 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const addAccount = (name: string) => {
+    if (accounts.some(acc => acc.name === name)) {
+      toast.error("Ya existe una cuenta con ese nombre");
+      return;
+    }
+    setAccounts([...accounts, { name, balance: 0 }]);
+    toast.success("Cuenta añadida");
+  };
+
+  const updateAccount = (oldName: string, newName: string) => {
+    if (oldName === newName) return;
+    if (accounts.some(acc => acc.name === newName)) {
+      toast.error("Ya existe una cuenta con ese nombre");
+      return;
+    }
+    
+    // Update account name
+    setAccounts(prevAccounts => 
+      prevAccounts.map(acc => 
+        acc.name === oldName ? { ...acc, name: newName } : acc
+      )
+    );
+    
+    // Update transactions
+    setTransactions(prevTransactions => 
+      prevTransactions.map(t => 
+        t.account === oldName ? { ...t, account: newName } : t
+      )
+    );
+    
+    // Update transfers
+    setTransfers(prevTransfers => 
+      prevTransfers.map(t => ({
+        ...t,
+        fromAccount: t.fromAccount === oldName ? newName : t.fromAccount,
+        toAccount: t.toAccount === oldName ? newName : t.toAccount,
+      }))
+    );
+    
+    toast.success("Cuenta actualizada");
+  };
+
+  const deleteAccount = (name: string) => {
+    const hasTransactions = transactions.some(t => t.account === name);
+    const hasTransfers = transfers.some(t => t.fromAccount === name || t.toAccount === name);
+    
+    if (hasTransactions || hasTransfers) {
+      toast.error("No se puede eliminar una cuenta con movimientos asociados");
+      return;
+    }
+    
+    setAccounts(accounts.filter(acc => acc.name !== name));
+    toast.success("Cuenta eliminada");
+  };
+
+  const getTotalBalance = () => {
+    return accounts.reduce((total, acc) => total + acc.balance, 0);
+  };
+
+  const getPendingTransactionsTotal = () => {
+    return transactions
+      .filter(t => !t.executed)
+      .reduce((total, t) => {
+        return total + (t.category === 'income' ? t.amount : -t.amount);
+      }, 0);
+  };
+
   return (
     <FinancesContext.Provider
       value={{
@@ -271,6 +343,11 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
         getTransactionsByCategory,
         getAccountTransactions,
         updateAccountBalance,
+        addAccount,
+        updateAccount,
+        deleteAccount,
+        getTotalBalance,
+        getPendingTransactionsTotal,
       }}
     >
       {children}

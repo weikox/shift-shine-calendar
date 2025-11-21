@@ -1,8 +1,55 @@
 import { Link } from "react-router-dom";
 import { Calendar, Wallet } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCalendar } from "@/contexts/CalendarContext";
+import { useFinances } from "@/contexts/FinancesContext";
+import { useMemo } from "react";
 
 const Index = () => {
+  const { days } = useCalendar();
+  const { getTotalBalance, getPendingTransactionsTotal } = useFinances();
+
+  const calendarSummary = useMemo(() => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const todayShift = days[todayStr]?.shift;
+
+    // Find next day with shift
+    let nextShiftDay = null;
+    let nextShiftDate = new Date(today);
+    nextShiftDate.setDate(nextShiftDate.getDate() + 1);
+    
+    for (let i = 0; i < 365; i++) {
+      const dateStr = nextShiftDate.toISOString().split('T')[0];
+      if (days[dateStr]?.shift && days[dateStr]?.shift !== 'libre') {
+        nextShiftDay = {
+          shift: days[dateStr].shift,
+          date: nextShiftDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+        };
+        break;
+      }
+      nextShiftDate.setDate(nextShiftDate.getDate() + 1);
+    }
+
+    return { todayShift, nextShiftDay };
+  }, [days]);
+
+  const financesSummary = useMemo(() => {
+    const currentBalance = getTotalBalance();
+    const pendingTotal = getPendingTransactionsTotal();
+    const projectedBalance = currentBalance + pendingTotal;
+
+    return { currentBalance, pendingTotal, projectedBalance };
+  }, [getTotalBalance, getPendingTransactionsTotal]);
+
+  const getShiftLabel = (shift: string | null) => {
+    if (!shift) return "Sin turno";
+    if (shift === "M") return "Mañana";
+    if (shift === "T") return "Tarde";
+    if (shift === "libre") return "Libre";
+    return shift;
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-4xl mx-auto">
@@ -24,9 +71,20 @@ const Index = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Organiza tus turnos de mañana y tarde, añade eventos especiales y configura recordatorios.
-                </p>
+                <div className="space-y-2">
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Hoy: </span>
+                    <span className="font-medium">{getShiftLabel(calendarSummary.todayShift)}</span>
+                  </div>
+                  {calendarSummary.nextShiftDay && (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Próximo turno: </span>
+                      <span className="font-medium">
+                        {getShiftLabel(calendarSummary.nextShiftDay.shift)} ({calendarSummary.nextShiftDay.date})
+                      </span>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </Link>
@@ -43,9 +101,18 @@ const Index = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Registra gastos fijos, periódicos, extra y diarios. Gestiona tus ingresos y balance de cuentas.
-                </p>
+                <div className="space-y-2">
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Balance actual: </span>
+                    <span className="font-medium">{financesSummary.currentBalance.toFixed(2)}€</span>
+                  </div>
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Balance proyectado: </span>
+                    <span className={`font-medium ${financesSummary.projectedBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {financesSummary.projectedBalance.toFixed(2)}€
+                    </span>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </Link>
