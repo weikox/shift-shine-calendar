@@ -1,17 +1,30 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useFinances } from "@/contexts/FinancesContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Download, Upload } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft, Download, Upload, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface FinancesConfigProps {
   onClose: () => void;
 }
 
 export const FinancesConfig = ({ onClose }: FinancesConfigProps) => {
-  const { exportData, importData } = useFinances();
+  const { exportData, importData, accounts, addAccount, updateAccount, deleteAccount } = useFinances();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showAccountDialog, setShowAccountDialog] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<string | null>(null);
+  const [accountName, setAccountName] = useState("");
 
   const handleExport = (format: 'json' | 'csv' | 'xlsx') => {
     exportData(format);
@@ -33,6 +46,41 @@ export const FinancesConfig = ({ onClose }: FinancesConfigProps) => {
     reader.readAsText(file);
   };
 
+  const handleAddAccount = () => {
+    setEditingAccount(null);
+    setAccountName("");
+    setShowAccountDialog(true);
+  };
+
+  const handleEditAccount = (name: string) => {
+    setEditingAccount(name);
+    setAccountName(name);
+    setShowAccountDialog(true);
+  };
+
+  const handleSaveAccount = () => {
+    if (!accountName.trim()) {
+      toast.error("El nombre de la cuenta no puede estar vacío");
+      return;
+    }
+
+    if (editingAccount) {
+      updateAccount(editingAccount, accountName.trim());
+    } else {
+      addAccount(accountName.trim());
+    }
+    
+    setShowAccountDialog(false);
+    setAccountName("");
+    setEditingAccount(null);
+  };
+
+  const handleDeleteAccount = (name: string) => {
+    if (confirm(`¿Estás seguro de eliminar la cuenta "${name}"?`)) {
+      deleteAccount(name);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-2xl mx-auto">
@@ -47,6 +95,46 @@ export const FinancesConfig = ({ onClose }: FinancesConfigProps) => {
         </header>
 
         <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Gestión de Cuentas</CardTitle>
+                <Button onClick={handleAddAccount} size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Añadir
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {accounts.map((account) => (
+                  <div
+                    key={account.name}
+                    className="flex items-center justify-between p-3 border rounded-lg"
+                  >
+                    <span className="font-medium">{account.name}</span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEditAccount(account.name)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteAccount(account.name)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Exportar Datos</CardTitle>
@@ -89,6 +177,40 @@ export const FinancesConfig = ({ onClose }: FinancesConfigProps) => {
             </CardContent>
           </Card>
         </div>
+
+        <Dialog open={showAccountDialog} onOpenChange={setShowAccountDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {editingAccount ? "Editar Cuenta" : "Nueva Cuenta"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingAccount 
+                  ? "Modifica el nombre de la cuenta" 
+                  : "Introduce el nombre de la nueva cuenta"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="accountName">Nombre de la cuenta</Label>
+                <Input
+                  id="accountName"
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  placeholder="Ej: Banco Santander"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAccountDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveAccount}>
+                {editingAccount ? "Guardar" : "Añadir"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
