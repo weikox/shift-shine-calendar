@@ -9,6 +9,7 @@ import { ArrowLeft, Plus, Trash2, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { EventsManager } from "@/components/EventsManager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { StorageSettings } from "@/components/StorageSettings";
 import * as XLSX from "xlsx";
 
 const Config = () => {
@@ -310,6 +311,10 @@ const Config = () => {
             </div>
           </CardContent>
         </Card>
+
+        <div className="mt-6">
+          <StorageSettings />
+        </div>
 
         <Card className="mt-6">
           <CardHeader>
