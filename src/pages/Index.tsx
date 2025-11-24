@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Calendar, Wallet } from "lucide-react";
+import { Calendar, Wallet, StickyNote, Refrigerator, Home } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCalendar } from "@/contexts/CalendarContext";
 import { useFinances } from "@/contexts/FinancesContext";
@@ -58,7 +58,7 @@ const Index = () => {
           <p className="text-muted-foreground">Gestiona tu calendario y finanzas</p>
         </header>
         
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           <Link to="/calendar" className="group">
             <Card className="transition-all hover:shadow-lg hover:scale-105">
               <CardHeader>
@@ -113,6 +113,63 @@ const Index = () => {
                     </span>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link to="/pizarra" className="group">
+            <Card className="transition-all hover:shadow-lg hover:scale-105">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <StickyNote className="h-12 w-12 text-primary" />
+                </div>
+                <CardTitle className="text-2xl">Pizarra</CardTitle>
+                <CardDescription>
+                  Espacio para notas y recordatorios
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Escribe y guarda tus notas importantes
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link to="/nevera" className="group">
+            <Card className="transition-all hover:shadow-lg hover:scale-105">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <Refrigerator className="h-12 w-12 text-primary" />
+                </div>
+                <CardTitle className="text-2xl">Nevera</CardTitle>
+                <CardDescription>
+                  Lista de compras y contenido de la nevera
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Organiza tu lista de la compra
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link to="/domotica" className="group">
+            <Card className="transition-all hover:shadow-lg hover:scale-105">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <Home className="h-12 w-12 text-primary" />
+                </div>
+                <CardTitle className="text-2xl">Domótica</CardTitle>
+                <CardDescription>
+                  Control de dispositivos inteligentes
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Gestiona tus dispositivos eWeLink
+                </p>
               </CardContent>
             </Card>
           </Link>
