@@ -6,6 +6,7 @@ import { useStorageMethod } from "@/hooks/useStorageMethod";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { SyncButton } from "./SyncButton";
 
 export function StorageSettings() {
   const { storageMethod, autoSync, updateStorageMethod, updateAutoSync } = useStorageMethod();
@@ -83,19 +84,25 @@ export function StorageSettings() {
           </RadioGroup>
 
           {user && (storageMethod === 'cloud' || storageMethod === 'hybrid') && (
-            <div className="flex items-center justify-between pt-4 border-t">
-              <div className="space-y-0.5">
-                <Label htmlFor="auto-sync">Sincronización Automática</Label>
-                <p className="text-sm text-muted-foreground">
-                  Sincronizar cambios automáticamente
-                </p>
+            <>
+              <div className="flex items-center justify-between pt-4 border-t">
+                <div className="space-y-0.5">
+                  <Label htmlFor="auto-sync">Sincronización Automática</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Sincronizar cambios automáticamente
+                  </p>
+                </div>
+                <Switch
+                  id="auto-sync"
+                  checked={autoSync}
+                  onCheckedChange={updateAutoSync}
+                />
               </div>
-              <Switch
-                id="auto-sync"
-                checked={autoSync}
-                onCheckedChange={updateAutoSync}
-              />
-            </div>
+
+              <div className="pt-4 border-t flex justify-center">
+                <SyncButton />
+              </div>
+            </>
           )}
 
           {!user && (

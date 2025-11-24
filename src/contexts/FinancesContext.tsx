@@ -1,5 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useStorageMethod } from "@/hooks/useStorageMethod";
+import { useAuth } from "@/hooks/useAuth";
 
 export interface Transaction {
   id: string;
@@ -17,7 +20,7 @@ export interface FileDocument {
   id: string;
   name: string;
   type: string;
-  data: string; // base64
+  data: string;
 }
 
 export interface AccountBalance {
@@ -55,11 +58,15 @@ interface FinancesContextType {
   deleteAccount: (name: string) => void;
   getTotalBalance: () => number;
   getPendingTransactionsTotal: () => number;
+  syncToCloud: () => Promise<void>;
+  lastSync: Date | null;
 }
 
 const FinancesContext = createContext<FinancesContextType | undefined>(undefined);
 
 export const FinancesProvider = ({ children }: { children: ReactNode }) => {
+  const { storageMethod, autoSync } = useStorageMethod();
+  const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<AccountBalance[]>([
     { name: "Banco 1", balance: 0 },
@@ -71,30 +78,215 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [pendingSync, setPendingSync] = useState(false);
 
-  // Load data from localStorage
+  // Load initial data
   useEffect(() => {
-    const savedTransactions = localStorage.getItem(`finances-transactions-${currentMonth}`);
-    const savedAccounts = localStorage.getItem('finances-accounts');
-    const savedTransfers = localStorage.getItem(`finances-transfers-${currentMonth}`);
-    
-    if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
-    if (savedAccounts) setAccounts(JSON.parse(savedAccounts));
-    if (savedTransfers) setTransfers(JSON.parse(savedTransfers));
-  }, [currentMonth]);
+    loadInitialData();
+  }, [storageMethod, user, currentMonth]);
 
-  // Save to localStorage
-  useEffect(() => {
-    localStorage.setItem(`finances-transactions-${currentMonth}`, JSON.stringify(transactions));
-  }, [transactions, currentMonth]);
+  const loadInitialData = async () => {
+    if (storageMethod === 'local' || !user) {
+      // Load from localStorage
+      const savedTransactions = localStorage.getItem(`finances-transactions-${currentMonth}`);
+      const savedAccounts = localStorage.getItem('finances-accounts');
+      const savedTransfers = localStorage.getItem(`finances-transfers-${currentMonth}`);
+      
+      if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
+      if (savedAccounts) setAccounts(JSON.parse(savedAccounts));
+      if (savedTransfers) setTransfers(JSON.parse(savedTransfers));
+    } else if (storageMethod === 'cloud') {
+      // Load only from cloud
+      await loadFromCloud();
+    } else if (storageMethod === 'hybrid') {
+      // Load from cloud and fallback to local
+      await loadFromCloud();
+    }
+  };
+
+  const loadFromCloud = async () => {
+    if (!user) return;
+
+    try {
+      // Load accounts
+      const { data: accountsData, error: accountsError } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (accountsError) throw accountsError;
+
+      if (accountsData && accountsData.length > 0) {
+        setAccounts(accountsData.map(acc => ({
+          name: acc.name,
+          balance: 0 // Balance is calculated from transactions
+        })));
+      }
+
+      // Load transactions for current month
+      const { data: transactionsData, error: transactionsError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('month', currentMonth);
+
+      if (transactionsError) throw transactionsError;
+
+      if (transactionsData) {
+        const mappedTransactions: Transaction[] = transactionsData.map(t => ({
+          id: t.id,
+          name: t.description,
+          amount: Number(t.amount),
+          account: t.account_id, // We'll need to map this to account name
+          executed: !t.pending,
+          category: t.type as any,
+          date: t.date,
+        }));
+        setTransactions(mappedTransactions);
+      }
+
+      // Load transfers for current month
+      const { data: transfersData, error: transfersError } = await supabase
+        .from('transfers')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('month', currentMonth);
+
+      if (transfersError) throw transfersError;
+
+      if (transfersData) {
+        const mappedTransfers: Transfer[] = transfersData.map(t => ({
+          id: t.id,
+          fromAccount: t.from_account_id,
+          toAccount: t.to_account_id,
+          amount: Number(t.amount),
+          date: t.date,
+          note: t.description,
+        }));
+        setTransfers(mappedTransfers);
+      }
+
+      setLastSync(new Date());
+    } catch (error) {
+      console.error('Error loading from cloud:', error);
+      toast.error('Error al cargar datos de la nube');
+      
+      // Fallback to localStorage in hybrid mode
+      if (storageMethod === 'hybrid') {
+        const savedTransactions = localStorage.getItem(`finances-transactions-${currentMonth}`);
+        const savedAccounts = localStorage.getItem('finances-accounts');
+        const savedTransfers = localStorage.getItem(`finances-transfers-${currentMonth}`);
+        
+        if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
+        if (savedAccounts) setAccounts(JSON.parse(savedAccounts));
+        if (savedTransfers) setTransfers(JSON.parse(savedTransfers));
+      }
+    }
+  };
+
+  const syncToCloud = async () => {
+    if (!user) {
+      toast.error('Debes iniciar sesión para sincronizar');
+      return;
+    }
+
+    setPendingSync(true);
+    try {
+      // Get account IDs mapping
+      const accountMapping: Record<string, string> = {};
+      
+      for (const account of accounts) {
+        const { data: existingAccount } = await supabase
+          .from('accounts')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('name', account.name)
+          .maybeSingle();
+
+        if (existingAccount) {
+          accountMapping[account.name] = existingAccount.id;
+        } else {
+          const { data: newAccount, error } = await supabase
+            .from('accounts')
+            .insert({ user_id: user.id, name: account.name })
+            .select('id')
+            .single();
+
+          if (error) throw error;
+          if (newAccount) accountMapping[account.name] = newAccount.id;
+        }
+      }
+
+      // Sync transactions
+      for (const transaction of transactions) {
+        const accountId = accountMapping[transaction.account];
+        if (!accountId) continue;
+
+        await supabase
+          .from('transactions')
+          .upsert({
+            id: transaction.id,
+            user_id: user.id,
+            account_id: accountId,
+            description: transaction.name,
+            amount: transaction.amount,
+            type: transaction.category,
+            date: transaction.date,
+            month: currentMonth,
+            pending: !transaction.executed,
+          });
+      }
+
+      // Sync transfers
+      for (const transfer of transfers) {
+        const fromAccountId = accountMapping[transfer.fromAccount];
+        const toAccountId = accountMapping[transfer.toAccount];
+        if (!fromAccountId || !toAccountId) continue;
+
+        await supabase
+          .from('transfers')
+          .upsert({
+            id: transfer.id,
+            user_id: user.id,
+            from_account_id: fromAccountId,
+            to_account_id: toAccountId,
+            amount: transfer.amount,
+            date: transfer.date,
+            month: currentMonth,
+            description: transfer.note || '',
+          });
+      }
+
+      setLastSync(new Date());
+      toast.success('Datos financieros sincronizados con la nube');
+    } catch (error) {
+      console.error('Error syncing to cloud:', error);
+      toast.error('Error al sincronizar con la nube');
+    } finally {
+      setPendingSync(false);
+    }
+  };
+
+  const saveToStorage = () => {
+    // Always save to localStorage for instant feedback
+    if (storageMethod !== 'cloud') {
+      localStorage.setItem(`finances-transactions-${currentMonth}`, JSON.stringify(transactions));
+      localStorage.setItem('finances-accounts', JSON.stringify(accounts));
+      localStorage.setItem(`finances-transfers-${currentMonth}`, JSON.stringify(transfers));
+    }
+
+    // Sync to cloud if needed
+    if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
+      if (autoSync && !pendingSync) {
+        setTimeout(() => syncToCloud(), 2000); // Debounce 2s
+      }
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem('finances-accounts', JSON.stringify(accounts));
-  }, [accounts]);
-
-  useEffect(() => {
-    localStorage.setItem(`finances-transfers-${currentMonth}`, JSON.stringify(transfers));
-  }, [transfers, currentMonth]);
+    saveToStorage();
+  }, [transactions, accounts, transfers]);
 
   const addTransaction = (transaction: Omit<Transaction, 'id'>) => {
     const newTransaction: Transaction = {
@@ -103,7 +295,6 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     };
     setTransactions([...transactions, newTransaction]);
     
-    // Update account balance if executed
     if (transaction.executed) {
       updateAccountBalanceFromTransaction(newTransaction);
     }
@@ -119,7 +310,6 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     
     const newTransaction = { ...oldTransaction, ...updates } as Transaction;
     
-    // Adjust account balance if execution status changed
     if (oldTransaction && oldTransaction.executed !== newTransaction.executed) {
       updateAccountBalanceFromTransaction(newTransaction, oldTransaction.executed ? 'remove' : 'add');
     }
@@ -158,7 +348,6 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     };
     setTransfers([...transfers, newTransfer]);
     
-    // Update balances
     setAccounts(prevAccounts => 
       prevAccounts.map(acc => {
         if (acc.name === transfer.fromAccount) {
@@ -182,7 +371,6 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     const prevTransactions = localStorage.getItem(`finances-transactions-${prevMonth}`);
     if (prevTransactions) {
       const parsedTransactions = JSON.parse(prevTransactions);
-      // Only load pending transactions
       const pendingTransactions = parsedTransactions
         .filter((t: Transaction) => !t.executed)
         .map((t: Transaction) => ({ ...t, id: `${Date.now()}-${Math.random()}`, date: currentMonth }));
@@ -199,12 +387,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const getAccountTransactions = (accountName: string) => {
-    const accountTransactions = transactions.filter(t => t.account === accountName);
-    const accountTransfers = transfers.filter(t => 
-      t.fromAccount === accountName || t.toAccount === accountName
-    );
-    
-    return accountTransactions;
+    return transactions.filter(t => t.account === accountName);
   };
 
   const updateAccountBalance = (accountName: string, newBalance: number) => {
@@ -274,21 +457,18 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     
-    // Update account name
     setAccounts(prevAccounts => 
       prevAccounts.map(acc => 
         acc.name === oldName ? { ...acc, name: newName } : acc
       )
     );
     
-    // Update transactions
     setTransactions(prevTransactions => 
       prevTransactions.map(t => 
         t.account === oldName ? { ...t, account: newName } : t
       )
     );
     
-    // Update transfers
     setTransfers(prevTransfers => 
       prevTransfers.map(t => ({
         ...t,
@@ -348,6 +528,8 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
         deleteAccount,
         getTotalBalance,
         getPendingTransactionsTotal,
+        syncToCloud,
+        lastSync,
       }}
     >
       {children}
