@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { BankAggregatorConfig } from "@/components/BankAggregatorConfig";
 
 interface FinancesConfigProps {
   onClose: () => void;
@@ -176,6 +177,8 @@ export const FinancesConfig = ({ onClose }: FinancesConfigProps) => {
               </p>
             </CardContent>
           </Card>
+
+          <BankAggregatorConfig />
         </div>
 
         <Dialog open={showAccountDialog} onOpenChange={setShowAccountDialog}>

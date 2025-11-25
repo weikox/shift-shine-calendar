@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, X, Eye } from "lucide-react";
+import { Upload, X, Eye, Camera } from "lucide-react";
 import { toast } from "sonner";
+import Tesseract from 'tesseract.js';
 
 interface TransactionDialogProps {
   open: boolean;
@@ -25,6 +26,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
   const [periodicity, setPeriodicity] = useState<'monthly' | 'quarterly' | 'annual'>('monthly');
   const [documents, setDocuments] = useState<Array<{ id: string; name: string; type: string; data: string }>>([]);
   const [viewingDoc, setViewingDoc] = useState<string | null>(null);
+  const [processingOCR, setProcessingOCR] = useState(false);
 
   useEffect(() => {
     if (transactionId) {
@@ -51,6 +53,43 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
     setDocuments([]);
   };
 
+  const processImageWithOCR = async (imageData: string) => {
+    if (!name && !amount) {
+      setProcessingOCR(true);
+      toast.info('Procesando documento con OCR...');
+      
+      try {
+        const result = await Tesseract.recognize(imageData, 'spa', {
+          logger: (m) => console.log(m)
+        });
+        
+        const text = result.data.text;
+        
+        // Buscar cantidad (euros)
+        const amountMatch = text.match(/(\d+[.,]\d{2})\s*€?/);
+        if (amountMatch && !amount) {
+          const foundAmount = amountMatch[1].replace(',', '.');
+          setAmount(foundAmount);
+          toast.success(`Cantidad detectada: ${foundAmount}€`);
+        }
+        
+        // Buscar posible nombre/concepto (primera línea no vacía)
+        if (!name) {
+          const lines = text.split('\n').filter(line => line.trim().length > 3);
+          if (lines.length > 0) {
+            setName(lines[0].trim());
+            toast.success(`Concepto sugerido: ${lines[0].trim()}`);
+          }
+        }
+      } catch (error) {
+        console.error('Error en OCR:', error);
+        toast.error('No se pudo leer el documento automáticamente');
+      } finally {
+        setProcessingOCR(false);
+      }
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -63,7 +102,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
       }
 
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         const newDoc = {
           id: `${Date.now()}-${i}`,
           name: file.name,
@@ -71,6 +110,11 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
           data: event.target?.result as string,
         };
         setDocuments(prev => [...prev, newDoc]);
+        
+        // Si es imagen y el formulario está vacío, intentar OCR
+        if (file.type.startsWith('image/')) {
+          await processImageWithOCR(newDoc.data);
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -178,7 +222,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
             </div>
 
             <div>
-              <Label>Documentos adjuntos</Label>
+              <Label>Documentos adjuntos {processingOCR && "(Procesando OCR...)"}</Label>
               <div className="mt-2 space-y-2">
                 {documents.map(doc => (
                   <div key={doc.id} className="flex items-center justify-between p-2 border rounded">
@@ -203,17 +247,30 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
                     </div>
                   </div>
                 ))}
-                <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded cursor-pointer hover:bg-accent">
-                  <Upload className="h-4 w-4" />
-                  <span className="text-sm">Subir documento</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*,application/pdf"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded cursor-pointer hover:bg-accent">
+                    <Camera className="h-4 w-4" />
+                    <span className="text-sm">Cámara</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded cursor-pointer hover:bg-accent">
+                    <Upload className="h-4 w-4" />
+                    <span className="text-sm">Archivo</span>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*,application/pdf"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
             </div>
 
