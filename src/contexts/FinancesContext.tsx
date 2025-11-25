@@ -58,6 +58,7 @@ interface FinancesContextType {
   deleteAccount: (name: string) => void;
   getTotalBalance: () => number;
   getPendingTransactionsTotal: () => number;
+  getPreviousMonthBalance: () => number;
   syncToCloud: () => Promise<void>;
   lastSync: Date | null;
 }
@@ -505,6 +506,26 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       }, 0);
   };
 
+  const getPreviousMonthBalance = () => {
+    // Calculate the previous month
+    const [year, month] = currentMonth.split('-').map(Number);
+    const prevDate = new Date(year, month - 2, 1); // month-2 porque los meses van de 0-11
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+    
+    // Try to get from localStorage
+    const savedTransactions = localStorage.getItem(`finances-transactions-${prevMonth}`);
+    if (savedTransactions) {
+      const prevTransactions: Transaction[] = JSON.parse(savedTransactions);
+      return prevTransactions
+        .filter(t => t.executed)
+        .reduce((total, t) => {
+          return total + (t.category === 'income' ? t.amount : -t.amount);
+        }, 0);
+    }
+    
+    return 0;
+  };
+
   return (
     <FinancesContext.Provider
       value={{
@@ -528,6 +549,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
         deleteAccount,
         getTotalBalance,
         getPendingTransactionsTotal,
+        getPreviousMonthBalance,
         syncToCloud,
         lastSync,
       }}
