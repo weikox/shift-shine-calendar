@@ -8,28 +8,48 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
 export const AccountBalanceTable = () => {
-  const { accounts, transactions, getAccountTransactions, getPreviousMonthBalance } = useFinances();
+  const { accounts, transactions, getAccountTransactions, getPreviousMonthBalanceByAccount, getPendingByAccount } = useFinances();
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
-  const [includePreviousMonth, setIncludePreviousMonth] = useState(true);
-  const [includePending, setIncludePending] = useState(true);
+  const [showPreviousMonth, setShowPreviousMonth] = useState(true);
+  const [showPending, setShowPending] = useState(true);
 
-  const previousMonthTotal = getPreviousMonthBalance();
-  const pendingTransactions = transactions.filter(t => !t.executed);
-  const pendingTotal = pendingTransactions.reduce((sum, t) => {
-    return sum + (t.category === 'income' ? t.amount : -t.amount);
-  }, 0);
-
-  const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
-  const adjustedTotal = totalBalance + 
-    (includePreviousMonth ? previousMonthTotal : 0) +
-    (includePending ? pendingTotal : 0);
   const accountTransactions = selectedAccount ? getAccountTransactions(selectedAccount) : [];
+
+  // Calculate totals
+  const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+  const totalPreviousMonth = accounts.reduce((sum, acc) => sum + getPreviousMonthBalanceByAccount(acc.name), 0);
+  const totalPending = accounts.reduce((sum, acc) => sum + getPendingByAccount(acc.name), 0);
+  const grandTotal = totalBalance + 
+    (showPreviousMonth ? totalPreviousMonth : 0) + 
+    (showPending ? totalPending : 0);
 
   return (
     <>
       <Card>
         <CardHeader>
           <CardTitle>Balance de Cuentas</CardTitle>
+          <div className="flex gap-4 mt-2">
+            <div className="flex items-center gap-2">
+              <Checkbox 
+                id="show-previous"
+                checked={showPreviousMonth} 
+                onCheckedChange={(checked) => setShowPreviousMonth(checked as boolean)}
+              />
+              <Label htmlFor="show-previous" className="cursor-pointer text-sm">
+                Mostrar Mes Anterior
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox 
+                id="show-pending"
+                checked={showPending} 
+                onCheckedChange={(checked) => setShowPending(checked as boolean)}
+              />
+              <Label htmlFor="show-pending" className="cursor-pointer text-sm">
+                Mostrar Pendientes
+              </Label>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -37,70 +57,77 @@ export const AccountBalanceTable = () => {
               <TableRow>
                 <TableHead>Cuenta</TableHead>
                 <TableHead className="text-right">Saldo Actual</TableHead>
+                {showPreviousMonth && <TableHead className="text-right">Mes Anterior</TableHead>}
+                {showPending && <TableHead className="text-right">Pendientes</TableHead>}
+                <TableHead className="text-right">Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {accounts.map((account) => (
-                <TableRow
-                  key={account.name}
-                  className="cursor-pointer hover:bg-accent"
-                  onClick={() => setSelectedAccount(account.name)}
-                >
-                  <TableCell className="font-medium">{account.name}</TableCell>
-                  <TableCell className="text-right">
-                    <span className={account.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                      {account.balance.toFixed(2)}€
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
-              <TableRow className="font-bold border-t-2">
-                <TableCell>Subtotal</TableCell>
+              {accounts.map((account) => {
+                const previousMonth = getPreviousMonthBalanceByAccount(account.name);
+                const pending = getPendingByAccount(account.name);
+                const accountTotal = account.balance + 
+                  (showPreviousMonth ? previousMonth : 0) + 
+                  (showPending ? pending : 0);
+
+                return (
+                  <TableRow
+                    key={account.name}
+                    className="cursor-pointer hover:bg-accent"
+                    onClick={() => setSelectedAccount(account.name)}
+                  >
+                    <TableCell className="font-medium">{account.name}</TableCell>
+                    <TableCell className="text-right">
+                      <span className={account.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        {account.balance.toFixed(2)}€
+                      </span>
+                    </TableCell>
+                    {showPreviousMonth && (
+                      <TableCell className="text-right">
+                        <span className={previousMonth >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          {previousMonth.toFixed(2)}€
+                        </span>
+                      </TableCell>
+                    )}
+                    {showPending && (
+                      <TableCell className="text-right">
+                        <span className={pending >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          {pending.toFixed(2)}€
+                        </span>
+                      </TableCell>
+                    )}
+                    <TableCell className="text-right font-medium">
+                      <span className={accountTotal >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        {accountTotal.toFixed(2)}€
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              <TableRow className="font-bold text-lg border-t-2">
+                <TableCell>TOTAL</TableCell>
                 <TableCell className="text-right">
                   <span className={totalBalance >= 0 ? 'text-green-600' : 'text-red-600'}>
                     {totalBalance.toFixed(2)}€
                   </span>
                 </TableCell>
-              </TableRow>
-              <TableRow className="text-sm">
-                <TableCell className="flex items-center gap-2">
-                  <Checkbox 
-                    id="include-previous"
-                    checked={includePreviousMonth} 
-                    onCheckedChange={(checked) => setIncludePreviousMonth(checked as boolean)}
-                  />
-                  <Label htmlFor="include-previous" className="cursor-pointer">
-                    Saldo mes anterior
-                  </Label>
-                </TableCell>
+                {showPreviousMonth && (
+                  <TableCell className="text-right">
+                    <span className={totalPreviousMonth >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {totalPreviousMonth.toFixed(2)}€
+                    </span>
+                  </TableCell>
+                )}
+                {showPending && (
+                  <TableCell className="text-right">
+                    <span className={totalPending >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {totalPending.toFixed(2)}€
+                    </span>
+                  </TableCell>
+                )}
                 <TableCell className="text-right">
-                  <span className={previousMonthTotal >= 0 ? 'text-green-600' : 'text-red-600'}>
-                    {previousMonthTotal.toFixed(2)}€
-                  </span>
-                </TableCell>
-              </TableRow>
-              <TableRow className="text-sm">
-                <TableCell className="flex items-center gap-2">
-                  <Checkbox 
-                    id="include-pending"
-                    checked={includePending} 
-                    onCheckedChange={(checked) => setIncludePending(checked as boolean)}
-                  />
-                  <Label htmlFor="include-pending" className="cursor-pointer">
-                    Movimientos pendientes
-                  </Label>
-                </TableCell>
-                <TableCell className="text-right">
-                  <span className={pendingTotal >= 0 ? 'text-green-600' : 'text-red-600'}>
-                    {pendingTotal.toFixed(2)}€
-                  </span>
-                </TableCell>
-              </TableRow>
-              <TableRow className="font-bold text-lg border-t-2">
-                <TableCell>Total Ajustado</TableCell>
-                <TableCell className="text-right">
-                  <span className={adjustedTotal >= 0 ? 'text-green-600' : 'text-red-600'}>
-                    {adjustedTotal.toFixed(2)}€
+                  <span className={grandTotal >= 0 ? 'text-green-600' : 'text-red-600'}>
+                    {grandTotal.toFixed(2)}€
                   </span>
                 </TableCell>
               </TableRow>

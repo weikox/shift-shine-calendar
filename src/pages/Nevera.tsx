@@ -26,14 +26,14 @@ const Nevera = () => {
     } else if (storageMethod === 'cloud' || storageMethod === 'hybrid') {
       try {
         const { data, error } = await supabase
-          .from('calendar_days')
-          .select('note')
+          .from('notes')
+          .select('content')
           .eq('user_id', user.id)
-          .eq('date', 'nevera-note')
+          .eq('type', 'nevera')
           .maybeSingle();
 
         if (error) throw error;
-        if (data) setContent(data.note || '');
+        if (data) setContent(data.content || '');
       } catch (error) {
         console.error('Error loading nevera:', error);
         const saved = localStorage.getItem('nevera-content');
@@ -49,12 +49,13 @@ const Nevera = () => {
 
       if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
         await supabase
-          .from('calendar_days')
+          .from('notes')
           .upsert({
             user_id: user.id,
-            date: 'nevera-note',
-            note: content,
-            shift: null,
+            type: 'nevera',
+            content: content,
+          }, {
+            onConflict: 'user_id,type'
           });
       }
 
