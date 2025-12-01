@@ -59,6 +59,8 @@ interface FinancesContextType {
   getTotalBalance: () => number;
   getPendingTransactionsTotal: () => number;
   getPreviousMonthBalance: () => number;
+  getPreviousMonthBalanceByAccount: (accountName: string) => number;
+  getPendingByAccount: (accountName: string) => number;
   syncToCloud: () => Promise<void>;
   lastSync: Date | null;
 }
@@ -118,7 +120,13 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
 
       if (accountsError) throw accountsError;
 
+      // Create mapping of account ID to account name
+      const accountIdToName: Record<string, string> = {};
       if (accountsData && accountsData.length > 0) {
+        accountsData.forEach(acc => {
+          accountIdToName[acc.id] = acc.name;
+        });
+        
         setAccounts(accountsData.map(acc => ({
           name: acc.name,
           balance: 0 // Balance is calculated from transactions
@@ -139,12 +147,26 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
           id: t.id,
           name: t.description,
           amount: Number(t.amount),
-          account: t.account_id, // We'll need to map this to account name
+          account: accountIdToName[t.account_id] || t.account_id,
           executed: !t.pending,
           category: t.type as any,
           date: t.date,
         }));
         setTransactions(mappedTransactions);
+        
+        // Calculate account balances from transactions
+        const balances: Record<string, number> = {};
+        mappedTransactions.forEach(t => {
+          if (t.executed) {
+            if (!balances[t.account]) balances[t.account] = 0;
+            balances[t.account] += t.category === 'income' ? t.amount : -t.amount;
+          }
+        });
+        
+        setAccounts(prev => prev.map(acc => ({
+          ...acc,
+          balance: balances[acc.name] || 0
+        })));
       }
 
       // Load transfers for current month
@@ -159,18 +181,29 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       if (transfersData) {
         const mappedTransfers: Transfer[] = transfersData.map(t => ({
           id: t.id,
-          fromAccount: t.from_account_id,
-          toAccount: t.to_account_id,
+          fromAccount: accountIdToName[t.from_account_id] || t.from_account_id,
+          toAccount: accountIdToName[t.to_account_id] || t.to_account_id,
           amount: Number(t.amount),
           date: t.date,
           note: t.description,
         }));
         setTransfers(mappedTransfers);
+        
+        // Apply transfers to balances
+        setAccounts(prev => prev.map(acc => {
+          let balance = acc.balance;
+          mappedTransfers.forEach(transfer => {
+            if (transfer.fromAccount === acc.name) balance -= transfer.amount;
+            if (transfer.toAccount === acc.name) balance += transfer.amount;
+          });
+          return { ...acc, balance };
+        }));
       }
 
       setLastSync(new Date());
+      console.log('✅ Cloud data loaded successfully');
     } catch (error) {
-      console.error('Error loading from cloud:', error);
+      console.error('❌ Error loading from cloud:', error);
       toast.error('Error al cargar datos de la nube');
       
       // Fallback to localStorage in hybrid mode
@@ -192,11 +225,13 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    console.log('🔄 Starting cloud sync...');
     setPendingSync(true);
     try {
       // Get account IDs mapping
       const accountMapping: Record<string, string> = {};
       
+      console.log('📊 Syncing accounts:', accounts.length);
       for (const account of accounts) {
         const { data: existingAccount } = await supabase
           .from('accounts')
@@ -214,55 +249,77 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
             .select('id')
             .single();
 
-          if (error) throw error;
-          if (newAccount) accountMapping[account.name] = newAccount.id;
+          if (error) {
+            console.error('❌ Error creating account:', account.name, error);
+            throw error;
+          }
+          if (newAccount) {
+            accountMapping[account.name] = newAccount.id;
+            console.log('✅ Created account:', account.name);
+          }
         }
       }
 
-      // Sync transactions
-      for (const transaction of transactions) {
-        const accountId = accountMapping[transaction.account];
-        if (!accountId) continue;
+      // Sync transactions in batch
+      console.log('💰 Syncing transactions:', transactions.length);
+      const transactionsToSync = transactions
+        .filter(t => accountMapping[t.account])
+        .map(transaction => ({
+          id: transaction.id,
+          user_id: user.id,
+          account_id: accountMapping[transaction.account],
+          description: transaction.name,
+          amount: transaction.amount,
+          type: transaction.category,
+          date: transaction.date,
+          month: currentMonth,
+          pending: !transaction.executed,
+        }));
 
-        await supabase
+      if (transactionsToSync.length > 0) {
+        const { error: transError } = await supabase
           .from('transactions')
-          .upsert({
-            id: transaction.id,
-            user_id: user.id,
-            account_id: accountId,
-            description: transaction.name,
-            amount: transaction.amount,
-            type: transaction.category,
-            date: transaction.date,
-            month: currentMonth,
-            pending: !transaction.executed,
-          });
+          .upsert(transactionsToSync);
+        
+        if (transError) {
+          console.error('❌ Error syncing transactions:', transError);
+          throw transError;
+        }
+        console.log('✅ Synced transactions:', transactionsToSync.length);
       }
 
-      // Sync transfers
-      for (const transfer of transfers) {
-        const fromAccountId = accountMapping[transfer.fromAccount];
-        const toAccountId = accountMapping[transfer.toAccount];
-        if (!fromAccountId || !toAccountId) continue;
+      // Sync transfers in batch
+      console.log('🔄 Syncing transfers:', transfers.length);
+      const transfersToSync = transfers
+        .filter(t => accountMapping[t.fromAccount] && accountMapping[t.toAccount])
+        .map(transfer => ({
+          id: transfer.id,
+          user_id: user.id,
+          from_account_id: accountMapping[transfer.fromAccount],
+          to_account_id: accountMapping[transfer.toAccount],
+          amount: transfer.amount,
+          date: transfer.date,
+          month: currentMonth,
+          description: transfer.note || '',
+        }));
 
-        await supabase
+      if (transfersToSync.length > 0) {
+        const { error: transferError } = await supabase
           .from('transfers')
-          .upsert({
-            id: transfer.id,
-            user_id: user.id,
-            from_account_id: fromAccountId,
-            to_account_id: toAccountId,
-            amount: transfer.amount,
-            date: transfer.date,
-            month: currentMonth,
-            description: transfer.note || '',
-          });
+          .upsert(transfersToSync);
+        
+        if (transferError) {
+          console.error('❌ Error syncing transfers:', transferError);
+          throw transferError;
+        }
+        console.log('✅ Synced transfers:', transfersToSync.length);
       }
 
       setLastSync(new Date());
+      console.log('✅ Cloud sync completed successfully');
       toast.success('Datos financieros sincronizados con la nube');
     } catch (error) {
-      console.error('Error syncing to cloud:', error);
+      console.error('❌ Error syncing to cloud:', error);
       toast.error('Error al sincronizar con la nube');
     } finally {
       setPendingSync(false);
@@ -509,7 +566,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
   const getPreviousMonthBalance = () => {
     // Calculate the previous month
     const [year, month] = currentMonth.split('-').map(Number);
-    const prevDate = new Date(year, month - 2, 1); // month-2 porque los meses van de 0-11
+    const prevDate = new Date(year, month - 2, 1);
     const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
     
     // Try to get from localStorage
@@ -524,6 +581,32 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     }
     
     return 0;
+  };
+
+  const getPreviousMonthBalanceByAccount = (accountName: string) => {
+    const [year, month] = currentMonth.split('-').map(Number);
+    const prevDate = new Date(year, month - 2, 1);
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+    
+    const savedTransactions = localStorage.getItem(`finances-transactions-${prevMonth}`);
+    if (savedTransactions) {
+      const prevTransactions: Transaction[] = JSON.parse(savedTransactions);
+      return prevTransactions
+        .filter(t => t.executed && t.account === accountName)
+        .reduce((total, t) => {
+          return total + (t.category === 'income' ? t.amount : -t.amount);
+        }, 0);
+    }
+    
+    return 0;
+  };
+
+  const getPendingByAccount = (accountName: string) => {
+    return transactions
+      .filter(t => !t.executed && t.account === accountName)
+      .reduce((total, t) => {
+        return total + (t.category === 'income' ? t.amount : -t.amount);
+      }, 0);
   };
 
   return (
@@ -550,6 +633,8 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
         getTotalBalance,
         getPendingTransactionsTotal,
         getPreviousMonthBalance,
+        getPreviousMonthBalanceByAccount,
+        getPendingByAccount,
         syncToCloud,
         lastSync,
       }}

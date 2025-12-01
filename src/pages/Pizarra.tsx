@@ -26,14 +26,14 @@ const Pizarra = () => {
     } else if (storageMethod === 'cloud' || storageMethod === 'hybrid') {
       try {
         const { data, error } = await supabase
-          .from('calendar_days')
-          .select('note')
+          .from('notes')
+          .select('content')
           .eq('user_id', user.id)
-          .eq('date', 'pizarra-note')
+          .eq('type', 'pizarra')
           .maybeSingle();
 
         if (error) throw error;
-        if (data) setContent(data.note || '');
+        if (data) setContent(data.content || '');
       } catch (error) {
         console.error('Error loading pizarra:', error);
         const saved = localStorage.getItem('pizarra-content');
@@ -49,12 +49,13 @@ const Pizarra = () => {
 
       if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
         await supabase
-          .from('calendar_days')
+          .from('notes')
           .upsert({
             user_id: user.id,
-            date: 'pizarra-note',
-            note: content,
-            shift: null,
+            type: 'pizarra',
+            content: content,
+          }, {
+            onConflict: 'user_id,type'
           });
       }
 
