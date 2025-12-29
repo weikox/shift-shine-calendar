@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Upload, X, Eye, Camera } from "lucide-react";
 import { toast } from "sonner";
-import Tesseract from 'tesseract.js';
+import { createWorker } from 'tesseract.js';
 
 interface TransactionDialogProps {
   open: boolean;
@@ -58,10 +58,11 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
       setProcessingOCR(true);
       toast.info('Procesando documento con OCR...');
       
+      let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
       try {
-        const result = await Tesseract.recognize(imageData, 'spa', {
-          logger: (m) => console.log(m)
-        });
+        // tesseract.js v7 API: createWorker con idioma
+        worker = await createWorker('spa');
+        const result = await worker.recognize(imageData);
         
         const text = result.data.text;
         
@@ -85,6 +86,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
         console.error('Error en OCR:', error);
         toast.error('No se pudo leer el documento automáticamente');
       } finally {
+        if (worker) await worker.terminate();
         setProcessingOCR(false);
       }
     }
