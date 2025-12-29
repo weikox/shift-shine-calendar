@@ -1,12 +1,8 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Settings, Power, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Power, Loader2, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,64 +17,30 @@ interface Device {
   };
 }
 
-interface EwelinkConfig {
-  email: string;
-  password: string;
-  region: string;
-}
-
 const Domotica = () => {
   const navigate = useNavigate();
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(false);
-  const [configOpen, setConfigOpen] = useState(false);
-  const [config, setConfig] = useState<EwelinkConfig>({
-    email: '',
-    password: '',
-    region: 'eu',
-  });
+  const [togglingDevice, setTogglingDevice] = useState<string | null>(null);
 
   useEffect(() => {
-    loadConfig();
+    loadDevices();
   }, []);
 
-  const loadConfig = () => {
-    const saved = localStorage.getItem('ewelink-config');
-    if (saved) {
-      setConfig(JSON.parse(saved));
-    }
-  };
-
-  const saveConfig = () => {
-    localStorage.setItem('ewelink-config', JSON.stringify(config));
-    setConfigOpen(false);
-    toast.success('Configuración guardada');
-    loadDevices();
-  };
-
   const loadDevices = async () => {
-    if (!config.email || !config.password) {
-      toast.error('Configura primero tus credenciales de eWeLink');
-      setConfigOpen(true);
-      return;
-    }
-
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('ewelink', {
-        body: {
-          action: 'getDevices',
-          email: config.email,
-          password: config.password,
-          region: config.region,
-        },
+        body: { action: 'getDevices' },
       });
 
       if (error) throw error;
       
       if (data.success) {
         setDevices(data.data || []);
-        toast.success('Dispositivos cargados');
+        if (data.data?.length > 0) {
+          toast.success(`${data.data.length} dispositivos cargados`);
+        }
       } else {
         throw new Error(data.error);
       }
@@ -91,28 +53,38 @@ const Domotica = () => {
   };
 
   const toggleDevice = async (deviceId: string) => {
+    setTogglingDevice(deviceId);
     try {
       const { data, error } = await supabase.functions.invoke('ewelink', {
-        body: {
-          action: 'toggleDevice',
-          email: config.email,
-          password: config.password,
-          region: config.region,
-          deviceId,
-        },
+        body: { action: 'toggleDevice', deviceId },
       });
 
       if (error) throw error;
       
       if (data.success) {
         toast.success('Dispositivo actualizado');
-        loadDevices();
+        // Update local state optimistically
+        setDevices(prev => prev.map(d => {
+          if (d.deviceid === deviceId) {
+            const currentState = getDeviceState(d);
+            return {
+              ...d,
+              params: {
+                ...d.params,
+                switch: currentState ? 'off' : 'on'
+              }
+            };
+          }
+          return d;
+        }));
       } else {
         throw new Error(data.error);
       }
     } catch (error: any) {
       console.error('Error toggling device:', error);
       toast.error('Error al cambiar estado: ' + error.message);
+    } finally {
+      setTogglingDevice(null);
     }
   };
 
@@ -141,89 +113,38 @@ const Domotica = () => {
             <h1 className="text-3xl font-bold text-foreground">Domótica</h1>
           </div>
           
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={loadDevices}
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-            </Button>
-            
-            <Dialog open={configOpen} onOpenChange={setConfigOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <Settings className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Configuración eWeLink</DialogTitle>
-                  <DialogDescription>
-                    Introduce tus credenciales de eWeLink para controlar tus dispositivos
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={config.email}
-                      onChange={(e) => setConfig({ ...config, email: e.target.value })}
-                      placeholder="tu@email.com"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Contraseña</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={config.password}
-                      onChange={(e) => setConfig({ ...config, password: e.target.value })}
-                      placeholder="••••••••"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="region">Región</Label>
-                    <Select
-                      value={config.region}
-                      onValueChange={(value) => setConfig({ ...config, region: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="eu">Europa</SelectItem>
-                        <SelectItem value="us">Estados Unidos</SelectItem>
-                        <SelectItem value="cn">China</SelectItem>
-                        <SelectItem value="as">Asia</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <Button onClick={saveConfig} className="w-full">
-                  Guardar y Conectar
-                </Button>
-              </DialogContent>
-            </Dialog>
-          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={loadDevices}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+          </Button>
         </div>
 
-        {devices.length === 0 ? (
+        {loading && devices.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="h-12 w-12 text-muted-foreground mb-4 animate-spin" />
+              <p className="text-muted-foreground text-center">
+                Cargando dispositivos...
+              </p>
+            </CardContent>
+          </Card>
+        ) : devices.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Power className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground text-center mb-4">
                 No hay dispositivos conectados
               </p>
-              <Button onClick={() => setConfigOpen(true)}>
-                Configurar eWeLink
+              <Button onClick={loadDevices} disabled={loading}>
+                Reintentar
               </Button>
             </CardContent>
           </Card>
@@ -245,11 +166,15 @@ const Domotica = () => {
                     <span className="text-sm text-muted-foreground">
                       {getDeviceState(device) ? 'Encendido' : 'Apagado'}
                     </span>
-                    <Switch
-                      checked={getDeviceState(device)}
-                      onCheckedChange={() => toggleDevice(device.deviceid)}
-                      disabled={!device.online}
-                    />
+                    {togglingDevice === device.deviceid ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Switch
+                        checked={getDeviceState(device)}
+                        onCheckedChange={() => toggleDevice(device.deviceid)}
+                        disabled={!device.online}
+                      />
+                    )}
                   </div>
                 </CardContent>
               </Card>
