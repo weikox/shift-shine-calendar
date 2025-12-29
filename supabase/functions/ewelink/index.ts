@@ -5,42 +5,159 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// eWeLink API v2 endpoints
+const EWELINK_API_URL = 'https://eu-apia.coolkit.cc';
+
+async function getAccessToken(appId: string, appSecret: string): Promise<string> {
+  const timestamp = Date.now();
+  const nonce = Math.random().toString(36).substring(2, 10);
+  
+  // Create signature using HMAC-SHA256
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(appSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signData = `${appId}_${timestamp}_${nonce}`;
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(signData));
+  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
+  
+  const response = await fetch(`${EWELINK_API_URL}/v2/user/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CK-Appid': appId,
+      'X-CK-Nonce': nonce,
+      'Authorization': `Sign ${signatureB64}`,
+    },
+    body: JSON.stringify({
+      lang: 'en',
+      countryCode: '+34',
+      ts: timestamp,
+      version: 8,
+      appid: appId,
+    }),
+  });
+  
+  const data = await response.json();
+  console.log('Login response:', JSON.stringify(data));
+  
+  if (data.error !== 0) {
+    throw new Error(`Login failed: ${data.msg || 'Unknown error'}`);
+  }
+  
+  return data.data.at;
+}
+
+async function makeApiRequest(
+  endpoint: string,
+  method: string,
+  appId: string,
+  accessToken: string,
+  body?: object
+) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-CK-Appid': appId,
+    'Authorization': `Bearer ${accessToken}`,
+  };
+  
+  const options: RequestInit = {
+    method,
+    headers,
+  };
+  
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+  
+  const response = await fetch(`${EWELINK_API_URL}${endpoint}`, options);
+  return response.json();
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { action, email, password, region, deviceId, state } = await req.json();
-
-    // Dynamic import of ewelink-api
-    const ewelink = await import('npm:ewelink-api@3.1.7');
+    const appId = Deno.env.get('APPID');
+    const appSecret = Deno.env.get('APPSECRET');
     
-    const connection = new ewelink.default({
-      email,
-      password,
-    });
+    if (!appId || !appSecret) {
+      throw new Error('APPID and APPSECRET must be configured');
+    }
+    
+    const { action, deviceId, state } = await req.json();
+    console.log(`eWeLink action: ${action}, deviceId: ${deviceId}`);
+
+    // Get access token
+    const accessToken = await getAccessToken(appId, appSecret);
+    console.log('Access token obtained successfully');
 
     let result;
 
     switch (action) {
       case 'getDevices':
-        result = await connection.getDevices();
+        result = await makeApiRequest('/v2/device/thing', 'GET', appId, accessToken);
+        console.log('Devices response:', JSON.stringify(result));
+        
+        if (result.error === 0) {
+          // Transform the response to match expected format
+          const devices = result.data.thingList?.map((thing: any) => ({
+            deviceid: thing.itemData.deviceid,
+            name: thing.itemData.name,
+            online: thing.itemData.online,
+            params: thing.itemData.params || {},
+          })) || [];
+          result = devices;
+        } else {
+          throw new Error(result.msg || 'Failed to get devices');
+        }
         break;
       
       case 'getDevice':
         if (!deviceId) throw new Error('Device ID required');
-        result = await connection.getDevice(deviceId);
+        result = await makeApiRequest(`/v2/device/thing?thingList=[{"itemType":1,"id":"${deviceId}"}]`, 'GET', appId, accessToken);
         break;
       
       case 'toggleDevice':
         if (!deviceId) throw new Error('Device ID required');
-        result = await connection.toggleDevice(deviceId);
+        // First get current state
+        const deviceInfo = await makeApiRequest(`/v2/device/thing?thingList=[{"itemType":1,"id":"${deviceId}"}]`, 'GET', appId, accessToken);
+        console.log('Device info:', JSON.stringify(deviceInfo));
+        
+        if (deviceInfo.error !== 0) {
+          throw new Error('Failed to get device state');
+        }
+        
+        const device = deviceInfo.data.thingList?.[0]?.itemData;
+        if (!device) {
+          throw new Error('Device not found');
+        }
+        
+        const currentState = device.params?.switch === 'on';
+        const newState = currentState ? 'off' : 'on';
+        
+        result = await makeApiRequest('/v2/device/thing/status', 'POST', appId, accessToken, {
+          type: 1,
+          id: deviceId,
+          params: { switch: newState }
+        });
+        console.log('Toggle result:', JSON.stringify(result));
         break;
       
       case 'setDevicePowerState':
         if (!deviceId) throw new Error('Device ID required');
-        result = await connection.setDevicePowerState(deviceId, state);
+        result = await makeApiRequest('/v2/device/thing/status', 'POST', appId, accessToken, {
+          type: 1,
+          id: deviceId,
+          params: { switch: state }
+        });
         break;
       
       default:
