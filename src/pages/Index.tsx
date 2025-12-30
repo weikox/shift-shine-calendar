@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useCalendar } from "@/contexts/CalendarContext";
 import { useFinances } from "@/contexts/FinancesContext";
 import { useMemo } from "react";
-
+import { GlobalBackup } from "@/components/GlobalBackup";
 const Index = () => {
   const { days } = useCalendar();
   const { getTotalBalance, getPendingTransactionsTotal } = useFinances();
@@ -51,7 +51,8 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6">
+    <div className="min-h-screen bg-background p-6 relative">
+      <GlobalBackup />
       <div className="max-w-4xl mx-auto">
         <header className="mb-12 text-center">
           <h1 className="text-4xl font-bold text-foreground mb-2">Panel de Control</h1>
