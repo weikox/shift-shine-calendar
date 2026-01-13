@@ -15,13 +15,16 @@ export const AccountBalanceTable = () => {
 
   const accountTransactions = selectedAccount ? getAccountTransactions(selectedAccount) : [];
 
-  // Calculate totals
-  const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
-  const totalPreviousMonth = accounts.reduce((sum, acc) => sum + getPreviousMonthBalanceByAccount(acc.name), 0);
-  const totalPending = accounts.reduce((sum, acc) => sum + getPendingByAccount(acc.name), 0);
-  const grandTotal = totalBalance + 
+  // Helper to round to 2 decimal places to avoid floating point errors
+  const round2 = (num: number) => Math.round(num * 100) / 100;
+
+  // Calculate totals with proper rounding
+  const totalBalance = round2(accounts.reduce((sum, acc) => sum + acc.balance, 0));
+  const totalPreviousMonth = round2(accounts.reduce((sum, acc) => sum + getPreviousMonthBalanceByAccount(acc.name), 0));
+  const totalPending = round2(accounts.reduce((sum, acc) => sum + getPendingByAccount(acc.name), 0));
+  const grandTotal = round2(totalBalance + 
     (showPreviousMonth ? totalPreviousMonth : 0) + 
-    (showPending ? totalPending : 0);
+    (showPending ? totalPending : 0));
 
   return (
     <>
@@ -64,11 +67,11 @@ export const AccountBalanceTable = () => {
             </TableHeader>
             <TableBody>
               {accounts.map((account) => {
-                const previousMonth = getPreviousMonthBalanceByAccount(account.name);
-                const pending = getPendingByAccount(account.name);
-                const accountTotal = account.balance + 
+                const previousMonth = round2(getPreviousMonthBalanceByAccount(account.name));
+                const pending = round2(getPendingByAccount(account.name));
+                const accountTotal = round2(account.balance + 
                   (showPreviousMonth ? previousMonth : 0) + 
-                  (showPending ? pending : 0);
+                  (showPending ? pending : 0));
 
                 return (
                   <TableRow
