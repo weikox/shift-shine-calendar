@@ -127,6 +127,66 @@ export function GlobalBackup() {
     }
   };
 
+  const parseCSVFinances = (csvText: string): { transactions: Transaction[], accounts: AccountBalance[] } => {
+    const lines = csvText.trim().split('\n');
+    const transactions: Transaction[] = [];
+    const accountSet = new Set<string>();
+    
+    // Skip header
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      // Parse CSV with quoted fields
+      const matches = line.match(/(?:^|,)("(?:[^"]*(?:""[^"]*)*)"|[^,]*)/g);
+      if (!matches || matches.length < 6) continue;
+      
+      const cleanField = (field: string) => {
+        let cleaned = field.replace(/^,/, '').trim();
+        if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+          cleaned = cleaned.slice(1, -1).replace(/""/g, '"');
+        }
+        return cleaned;
+      };
+      
+      const name = cleanField(matches[0]);
+      const amount = parseFloat(cleanField(matches[1]));
+      const account = cleanField(matches[2]);
+      const category = cleanField(matches[3]) as Transaction['category'];
+      const executed = cleanField(matches[4]) === 'true';
+      const date = cleanField(matches[5]);
+      
+      if (name && !isNaN(amount) && account && category && date) {
+        accountSet.add(account);
+        transactions.push({
+          id: `import-${Date.now()}-${i}`,
+          name,
+          amount,
+          account,
+          category,
+          executed,
+          date,
+        });
+      }
+    }
+    
+    const accounts: AccountBalance[] = Array.from(accountSet).map(name => ({ name, balance: 0 }));
+    return { transactions, accounts };
+  };
+
+  interface Transaction {
+    id: string;
+    name: string;
+    amount: number;
+    account: string;
+    category: 'fixed' | 'periodic' | 'extra' | 'daily' | 'income';
+    executed: boolean;
+    date: string;
+  }
+
+  interface AccountBalance {
+    name: string;
+    balance: number;
+  }
+
   const importAllData = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -134,11 +194,31 @@ export function GlobalBackup() {
     setIsImporting(true);
     try {
       const text = await file.text();
-      const data: GlobalBackupData = JSON.parse(text);
-
-      // Validate structure
-      if (!data.version || !data.calendar || !data.finances) {
-        throw new Error("Formato de backup inválido");
+      const isCSV = file.name.endsWith('.csv') || text.trim().startsWith('Nombre,');
+      
+      let data: GlobalBackupData;
+      
+      if (isCSV) {
+        // Parse CSV file (finances export)
+        const { transactions: csvTransactions, accounts: csvAccounts } = parseCSVFinances(text);
+        data = {
+          version: "1.0",
+          exportedAt: new Date().toISOString(),
+          calendar: { days: {}, config: {} },
+          finances: {
+            accounts: csvAccounts,
+            transactions: csvTransactions,
+            transfers: [],
+          },
+          notes: { pizarra: "", nevera: "" },
+          settings: { storageMethod: "local", autoSync: true },
+        };
+      } else {
+        data = JSON.parse(text);
+        // Validate structure for JSON
+        if (!data.version || !data.calendar || !data.finances) {
+          throw new Error("Formato de backup inválido");
+        }
       }
 
       // Import calendar data
@@ -300,7 +380,7 @@ export function GlobalBackup() {
                 </div>
                 <input
                   type="file"
-                  accept=".json"
+                  accept=".json,.csv"
                   onChange={importAllData}
                   className="hidden"
                   id="backup-import"
