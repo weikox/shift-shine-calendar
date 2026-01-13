@@ -18,13 +18,22 @@ export const AccountBalanceTable = () => {
   // Helper to round to 2 decimal places to avoid floating point errors
   const round2 = (num: number) => Math.round(num * 100) / 100;
 
-  // Calculate totals with proper rounding
-  const totalBalance = round2(accounts.reduce((sum, acc) => sum + acc.balance, 0));
-  const totalPreviousMonth = round2(accounts.reduce((sum, acc) => sum + getPreviousMonthBalanceByAccount(acc.name), 0));
-  const totalPending = round2(accounts.reduce((sum, acc) => sum + getPendingByAccount(acc.name), 0));
-  const grandTotal = round2(totalBalance + 
-    (showPreviousMonth ? totalPreviousMonth : 0) + 
-    (showPending ? totalPending : 0));
+  // Pre-calculate all account data to ensure consistent rounding
+  const accountData = accounts.map(account => {
+    const balance = round2(account.balance);
+    const previousMonth = round2(getPreviousMonthBalanceByAccount(account.name));
+    const pending = round2(getPendingByAccount(account.name));
+    const total = round2(balance + 
+      (showPreviousMonth ? previousMonth : 0) + 
+      (showPending ? pending : 0));
+    return { name: account.name, balance, previousMonth, pending, total };
+  });
+
+  // Calculate totals by summing the rounded individual values
+  const totalBalance = round2(accountData.reduce((sum, acc) => sum + acc.balance, 0));
+  const totalPreviousMonth = round2(accountData.reduce((sum, acc) => sum + acc.previousMonth, 0));
+  const totalPending = round2(accountData.reduce((sum, acc) => sum + acc.pending, 0));
+  const grandTotal = round2(accountData.reduce((sum, acc) => sum + acc.total, 0));
 
   return (
     <>
@@ -66,47 +75,39 @@ export const AccountBalanceTable = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {accounts.map((account) => {
-                const previousMonth = round2(getPreviousMonthBalanceByAccount(account.name));
-                const pending = round2(getPendingByAccount(account.name));
-                const accountTotal = round2(account.balance + 
-                  (showPreviousMonth ? previousMonth : 0) + 
-                  (showPending ? pending : 0));
-
-                return (
-                  <TableRow
-                    key={account.name}
-                    className="cursor-pointer hover:bg-accent"
-                    onClick={() => setSelectedAccount(account.name)}
-                  >
-                    <TableCell className="font-medium">{account.name}</TableCell>
+              {accountData.map((account) => (
+                <TableRow
+                  key={account.name}
+                  className="cursor-pointer hover:bg-accent"
+                  onClick={() => setSelectedAccount(account.name)}
+                >
+                  <TableCell className="font-medium">{account.name}</TableCell>
+                  <TableCell className="text-right">
+                    <span className={account.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {account.balance.toFixed(2)}€
+                    </span>
+                  </TableCell>
+                  {showPreviousMonth && (
                     <TableCell className="text-right">
-                      <span className={account.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        {account.balance.toFixed(2)}€
+                      <span className={account.previousMonth >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        {account.previousMonth.toFixed(2)}€
                       </span>
                     </TableCell>
-                    {showPreviousMonth && (
-                      <TableCell className="text-right">
-                        <span className={previousMonth >= 0 ? 'text-green-600' : 'text-red-600'}>
-                          {previousMonth.toFixed(2)}€
-                        </span>
-                      </TableCell>
-                    )}
-                    {showPending && (
-                      <TableCell className="text-right">
-                        <span className={pending >= 0 ? 'text-green-600' : 'text-red-600'}>
-                          {pending.toFixed(2)}€
-                        </span>
-                      </TableCell>
-                    )}
-                    <TableCell className="text-right font-medium">
-                      <span className={accountTotal >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        {accountTotal.toFixed(2)}€
+                  )}
+                  {showPending && (
+                    <TableCell className="text-right">
+                      <span className={account.pending >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        {account.pending.toFixed(2)}€
                       </span>
                     </TableCell>
-                  </TableRow>
-                );
-              })}
+                  )}
+                  <TableCell className="text-right font-medium">
+                    <span className={account.total >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {account.total.toFixed(2)}€
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
               <TableRow className="font-bold text-lg border-t-2">
                 <TableCell>TOTAL</TableCell>
                 <TableCell className="text-right">
