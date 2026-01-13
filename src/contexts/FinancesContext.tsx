@@ -361,15 +361,42 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
 
   const updateTransaction = (id: string, updates: Partial<Transaction>) => {
     const oldTransaction = transactions.find(t => t.id === id);
-    
-    setTransactions(transactions.map(t => 
-      t.id === id ? { ...t, ...updates } : t
-    ));
+    if (!oldTransaction) return;
     
     const newTransaction = { ...oldTransaction, ...updates } as Transaction;
     
-    if (oldTransaction && oldTransaction.executed !== newTransaction.executed) {
-      updateAccountBalanceFromTransaction(newTransaction, oldTransaction.executed ? 'remove' : 'add');
+    setTransactions(transactions.map(t => 
+      t.id === id ? newTransaction : t
+    ));
+    
+    // If old transaction was executed, remove its effect from balance
+    if (oldTransaction.executed) {
+      setAccounts(prevAccounts => 
+        prevAccounts.map(acc => {
+          if (acc.name === oldTransaction.account) {
+            const amount = oldTransaction.category === 'income' 
+              ? -oldTransaction.amount 
+              : oldTransaction.amount;
+            return { ...acc, balance: acc.balance + amount };
+          }
+          return acc;
+        })
+      );
+    }
+    
+    // If new transaction is executed, add its effect to balance
+    if (newTransaction.executed) {
+      setAccounts(prevAccounts => 
+        prevAccounts.map(acc => {
+          if (acc.name === newTransaction.account) {
+            const amount = newTransaction.category === 'income' 
+              ? newTransaction.amount 
+              : -newTransaction.amount;
+            return { ...acc, balance: acc.balance + amount };
+          }
+          return acc;
+        })
+      );
     }
     
     toast.success("Movimiento actualizado");
