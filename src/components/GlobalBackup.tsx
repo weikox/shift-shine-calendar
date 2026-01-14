@@ -294,7 +294,7 @@ export function GlobalBackup() {
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger asChild>
-        <Button variant="outline" size="icon" className="absolute top-6 right-6">
+        <Button variant="outline" size="icon">
           <Settings className="h-5 w-5" />
         </Button>
       </SheetTrigger>

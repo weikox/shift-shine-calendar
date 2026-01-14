@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Pencil, Trash2, Paperclip } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { format, parse } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface TransactionListProps {
   category: Transaction['category'];
@@ -40,6 +42,7 @@ export const TransactionList = ({ category, onEdit }: TransactionListProps) => {
           <TableRow>
             <TableHead className="w-12">✓</TableHead>
             <TableHead>Nombre</TableHead>
+            <TableHead>Fecha</TableHead>
             <TableHead>Cantidad</TableHead>
             <TableHead>Cuenta</TableHead>
             {category === 'periodic' && <TableHead>Periodicidad</TableHead>}
@@ -57,6 +60,12 @@ export const TransactionList = ({ category, onEdit }: TransactionListProps) => {
                 />
               </TableCell>
               <TableCell className="font-medium">{transaction.name}</TableCell>
+              <TableCell className="text-muted-foreground text-sm">
+                {transaction.date && transaction.date.length === 10 
+                  ? format(parse(transaction.date, "yyyy-MM-dd", new Date()), "d MMM", { locale: es })
+                  : transaction.date || "-"
+                }
+              </TableCell>
               <TableCell>
                 <span className={category === 'income' ? 'text-green-600' : 'text-red-600'}>
                   {category === 'income' ? '+' : '-'}{transaction.amount.toFixed(2)}€

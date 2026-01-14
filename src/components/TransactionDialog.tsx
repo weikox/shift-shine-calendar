@@ -6,9 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, X, Eye, Camera } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Upload, X, Eye, Camera, CalendarIcon } from "lucide-react";
 import { toast } from "sonner";
 import { createWorker } from 'tesseract.js';
+import { format, parse } from "date-fns";
+import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 interface TransactionDialogProps {
   open: boolean;
@@ -23,6 +28,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
   const [amount, setAmount] = useState("");
   const [account, setAccount] = useState(accounts[0]?.name || "");
   const [executed, setExecuted] = useState(false);
+  const [transactionDate, setTransactionDate] = useState<Date>(() => new Date());
   const [periodicity, setPeriodicity] = useState<'monthly' | 'quarterly' | 'annual'>('monthly');
   const [documents, setDocuments] = useState<Array<{ id: string; name: string; type: string; data: string }>>([]);
   const [viewingDoc, setViewingDoc] = useState<string | null>(null);
@@ -36,6 +42,19 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
         setAmount(transaction.amount.toString());
         setAccount(transaction.account);
         setExecuted(transaction.executed);
+        // Parse existing date - can be YYYY-MM or YYYY-MM-DD
+        if (transaction.date) {
+          try {
+            if (transaction.date.length === 7) {
+              // YYYY-MM format - use first day of month
+              setTransactionDate(parse(transaction.date + "-01", "yyyy-MM-dd", new Date()));
+            } else {
+              setTransactionDate(parse(transaction.date, "yyyy-MM-dd", new Date()));
+            }
+          } catch {
+            setTransactionDate(new Date());
+          }
+        }
         if (transaction.periodicity) setPeriodicity(transaction.periodicity);
         if (transaction.documents) setDocuments(transaction.documents);
       }
@@ -49,6 +68,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
     setAmount("");
     setAccount(accounts[0]?.name || "");
     setExecuted(false);
+    setTransactionDate(new Date());
     setPeriodicity('monthly');
     setDocuments([]);
   };
@@ -135,7 +155,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
       account,
       executed,
       category,
-      date: currentMonth,
+      date: format(transactionDate, "yyyy-MM-dd"),
       ...(category === 'periodic' && { periodicity }),
       documents: documents.length > 0 ? documents : undefined,
     };
@@ -195,7 +215,34 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
                     </SelectItem>
                   ))}
                 </SelectContent>
-              </Select>
+            </Select>
+            </div>
+
+            <div>
+              <Label>Fecha</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !transactionDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {transactionDate ? format(transactionDate, "d 'de' MMMM, yyyy", { locale: es }) : "Seleccionar fecha"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={transactionDate}
+                    onSelect={(date) => date && setTransactionDate(date)}
+                    initialFocus
+                    locale={es}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
 
             {category === 'periodic' && (
