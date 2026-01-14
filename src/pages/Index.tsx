@@ -51,9 +51,11 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6 relative">
-      <GlobalBackup />
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-4xl mx-auto relative">
+        <div className="absolute top-0 right-0 z-10">
+          <GlobalBackup />
+        </div>
         <header className="mb-12 text-center">
           <h1 className="text-4xl font-bold text-foreground mb-2">Panel de Control</h1>
           <p className="text-muted-foreground">Gestiona tu calendario y finanzas</p>
