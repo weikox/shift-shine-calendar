@@ -8,12 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Upload, X, Eye, Camera, CalendarIcon } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Upload, X, Eye, Camera, CalendarIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createWorker } from 'tesseract.js';
 import { format, parse } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { useDocumentStorage, CloudDocument } from "@/hooks/useDocumentStorage";
+import { useStorageMethod } from "@/hooks/useStorageMethod";
 
 interface TransactionDialogProps {
   open: boolean;
@@ -22,46 +25,78 @@ interface TransactionDialogProps {
   transactionId?: string;
 }
 
+interface LocalDocument {
+  id: string;
+  name: string;
+  type: string;
+  data: string;
+}
+
+type DocumentItem = CloudDocument | LocalDocument;
+
+const isCloudDocument = (doc: DocumentItem): doc is CloudDocument => {
+  return 'storagePath' in doc;
+};
+
 export const TransactionDialog = ({ open, onOpenChange, category, transactionId }: TransactionDialogProps) => {
   const { transactions, addTransaction, updateTransaction, accounts, currentMonth } = useFinances();
+  const { storageMethod } = useStorageMethod();
+  const { uploadDocument, deleteDocument, getDocuments, getDocumentUrl, uploadProgress } = useDocumentStorage();
+  
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [account, setAccount] = useState(accounts[0]?.name || "");
   const [executed, setExecuted] = useState(false);
   const [transactionDate, setTransactionDate] = useState<Date>(() => new Date());
   const [periodicity, setPeriodicity] = useState<'monthly' | 'quarterly' | 'annual'>('monthly');
-  const [documents, setDocuments] = useState<Array<{ id: string; name: string; type: string; data: string }>>([]);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [viewingDoc, setViewingDoc] = useState<string | null>(null);
   const [processingOCR, setProcessingOCR] = useState(false);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+
+  const isCloudMode = storageMethod === 'cloud' || storageMethod === 'hybrid';
 
   useEffect(() => {
-    if (transactionId) {
-      const transaction = transactions.find(t => t.id === transactionId);
-      if (transaction) {
-        setName(transaction.name);
-        setAmount(transaction.amount.toString());
-        setAccount(transaction.account);
-        setExecuted(transaction.executed);
-        // Parse existing date - can be YYYY-MM or YYYY-MM-DD
-        if (transaction.date) {
-          try {
-            if (transaction.date.length === 7) {
-              // YYYY-MM format - use first day of month
-              setTransactionDate(parse(transaction.date + "-01", "yyyy-MM-dd", new Date()));
-            } else {
-              setTransactionDate(parse(transaction.date, "yyyy-MM-dd", new Date()));
+    const loadTransaction = async () => {
+      if (transactionId) {
+        const transaction = transactions.find(t => t.id === transactionId);
+        if (transaction) {
+          setName(transaction.name);
+          setAmount(transaction.amount.toString());
+          setAccount(transaction.account);
+          setExecuted(transaction.executed);
+          
+          if (transaction.date) {
+            try {
+              if (transaction.date.length === 7) {
+                setTransactionDate(parse(transaction.date + "-01", "yyyy-MM-dd", new Date()));
+              } else {
+                setTransactionDate(parse(transaction.date, "yyyy-MM-dd", new Date()));
+              }
+            } catch {
+              setTransactionDate(new Date());
             }
-          } catch {
-            setTransactionDate(new Date());
+          }
+          
+          if (transaction.periodicity) setPeriodicity(transaction.periodicity);
+          
+          // Load documents based on storage mode
+          if (isCloudMode) {
+            setLoadingDocs(true);
+            const cloudDocs = await getDocuments(transactionId);
+            setDocuments(cloudDocs);
+            setLoadingDocs(false);
+          } else if (transaction.documents) {
+            setDocuments(transaction.documents as LocalDocument[]);
           }
         }
-        if (transaction.periodicity) setPeriodicity(transaction.periodicity);
-        if (transaction.documents) setDocuments(transaction.documents);
+      } else {
+        resetForm();
       }
-    } else {
-      resetForm();
-    }
-  }, [transactionId, transactions]);
+    };
+    
+    loadTransaction();
+  }, [transactionId, transactions, isCloudMode]);
 
   const resetForm = () => {
     setName("");
@@ -80,13 +115,11 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
       
       let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
       try {
-        // tesseract.js v7 API: createWorker con idioma
         worker = await createWorker('spa');
         const result = await worker.recognize(imageData);
         
         const text = result.data.text;
         
-        // Buscar cantidad (euros)
         const amountMatch = text.match(/(\d+[.,]\d{2})\s*€?/);
         if (amountMatch && !amount) {
           const foundAmount = amountMatch[1].replace(',', '.');
@@ -94,7 +127,6 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
           toast.success(`Cantidad detectada: ${foundAmount}€`);
         }
         
-        // Buscar posible nombre/concepto (primera línea no vacía)
         if (!name) {
           const lines = text.split('\n').filter(line => line.trim().length > 3);
           if (lines.length > 0) {
@@ -123,31 +155,76 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
         continue;
       }
 
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const newDoc = {
-          id: `${Date.now()}-${i}`,
-          name: file.name,
-          type: file.type,
-          data: event.target?.result as string,
-        };
-        setDocuments(prev => [...prev, newDoc]);
-        
-        // Si es imagen y el formulario está vacío, intentar OCR
-        if (file.type.startsWith('image/')) {
-          await processImageWithOCR(newDoc.data);
+      if (isCloudMode && transactionId) {
+        // Cloud mode: upload directly to storage
+        const cloudDoc = await uploadDocument(file, transactionId);
+        if (cloudDoc) {
+          setDocuments(prev => [...prev, cloudDoc]);
+          
+          // Process OCR if it's an image
+          if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+              await processImageWithOCR(event.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+          }
         }
-      };
-      reader.readAsDataURL(file);
+      } else {
+        // Local mode or new transaction: store as base64
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          const newDoc: LocalDocument = {
+            id: `${Date.now()}-${i}`,
+            name: file.name,
+            type: file.type,
+            data: event.target?.result as string,
+          };
+          setDocuments(prev => [...prev, newDoc]);
+          
+          if (file.type.startsWith('image/')) {
+            await processImageWithOCR(newDoc.data);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+    
+    // Reset input
+    e.target.value = '';
+  };
+
+  const removeDocument = async (doc: DocumentItem) => {
+    if (isCloudDocument(doc)) {
+      const success = await deleteDocument(doc.id);
+      if (success) {
+        setDocuments(documents.filter(d => d.id !== doc.id));
+      } else {
+        toast.error("Error al eliminar documento");
+      }
+    } else {
+      setDocuments(documents.filter(d => d.id !== doc.id));
     }
   };
 
-  const removeDocument = (id: string) => {
-    setDocuments(documents.filter(doc => doc.id !== id));
+  const viewDocument = async (doc: DocumentItem) => {
+    if (isCloudDocument(doc)) {
+      const url = await getDocumentUrl(doc.storagePath);
+      if (url) {
+        setViewingDoc(url);
+      } else {
+        toast.error("Error al obtener documento");
+      }
+    } else {
+      setViewingDoc(doc.data);
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // For local documents that need to be uploaded when creating new transaction
+    const localDocs = documents.filter((d): d is LocalDocument => !isCloudDocument(d));
     
     const transactionData = {
       name: name.trim(),
@@ -157,13 +234,25 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
       category,
       date: format(transactionDate, "yyyy-MM-dd"),
       ...(category === 'periodic' && { periodicity }),
-      documents: documents.length > 0 ? documents : undefined,
+      // Only include documents in local mode
+      ...(!isCloudMode && localDocs.length > 0 && { documents: localDocs }),
     };
 
     if (transactionId) {
       updateTransaction(transactionId, transactionData);
     } else {
-      addTransaction(transactionData);
+      const newId = addTransaction(transactionData);
+      
+      // Upload pending documents for new transaction in cloud mode
+      if (isCloudMode && localDocs.length > 0 && newId) {
+        for (const doc of localDocs) {
+          // Convert base64 back to file
+          const response = await fetch(doc.data);
+          const blob = await response.blob();
+          const file = new File([blob], doc.name, { type: doc.type });
+          await uploadDocument(file, newId);
+        }
+      }
     }
     
     onOpenChange(false);
@@ -271,55 +360,75 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
             </div>
 
             <div>
-              <Label>Documentos adjuntos {processingOCR && "(Procesando OCR...)"}</Label>
+              <Label>
+                Documentos adjuntos 
+                {processingOCR && " (Procesando OCR...)"}
+                {uploadProgress.uploading && " (Subiendo...)"}
+              </Label>
+              
+              {uploadProgress.uploading && (
+                <Progress value={uploadProgress.progress} className="mt-2" />
+              )}
+              
               <div className="mt-2 space-y-2">
-                {documents.map(doc => (
-                  <div key={doc.id} className="flex items-center justify-between p-2 border rounded">
-                    <span className="text-sm truncate flex-1">{doc.name}</span>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setViewingDoc(doc.data)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeDocument(doc.id)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+                {loadingDocs ? (
+                  <div className="flex items-center justify-center p-4 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Cargando documentos...
                   </div>
-                ))}
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded cursor-pointer hover:bg-accent">
-                    <Camera className="h-4 w-4" />
-                    <span className="text-sm">Cámara</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                  </label>
-                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded cursor-pointer hover:bg-accent">
-                    <Upload className="h-4 w-4" />
-                    <span className="text-sm">Archivo</span>
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*,application/pdf"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
+                ) : (
+                  <>
+                    {documents.map(doc => (
+                      <div key={doc.id} className="flex items-center justify-between p-2 border rounded">
+                        <span className="text-sm truncate flex-1">{doc.name}</span>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => viewDocument(doc)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeDocument(doc)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded cursor-pointer hover:bg-accent">
+                        <Camera className="h-4 w-4" />
+                        <span className="text-sm">Cámara</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                          disabled={uploadProgress.uploading}
+                        />
+                      </label>
+                      <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded cursor-pointer hover:bg-accent">
+                        <Upload className="h-4 w-4" />
+                        <span className="text-sm">Archivo</span>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*,application/pdf"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                          disabled={uploadProgress.uploading}
+                        />
+                      </label>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -327,7 +436,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit">
+              <Button type="submit" disabled={uploadProgress.uploading}>
                 {transactionId ? 'Actualizar' : 'Añadir'}
               </Button>
             </div>
@@ -342,7 +451,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
               <DialogTitle>Vista previa del documento</DialogTitle>
             </DialogHeader>
             <div className="overflow-auto">
-              {viewingDoc.startsWith('data:image') ? (
+              {viewingDoc.startsWith('data:image') || viewingDoc.includes('/storage/') ? (
                 <img src={viewingDoc} alt="Documento" className="max-w-full h-auto" />
               ) : viewingDoc.startsWith('data:application/pdf') ? (
                 <iframe src={viewingDoc} className="w-full h-[70vh]" />
