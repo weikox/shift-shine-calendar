@@ -42,7 +42,7 @@ interface FinancesContextType {
   accounts: AccountBalance[];
   transfers: Transfer[];
   currentMonth: string;
-  addTransaction: (transaction: Omit<Transaction, 'id'>) => void;
+  addTransaction: (transaction: Omit<Transaction, 'id'>) => string;
   updateTransaction: (id: string, transaction: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
   addTransfer: (transfer: Omit<Transfer, 'id'>) => void;
@@ -346,10 +346,11 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     saveToStorage();
   }, [transactions, accounts, transfers]);
 
-  const addTransaction = (transaction: Omit<Transaction, 'id'>) => {
+  const addTransaction = (transaction: Omit<Transaction, 'id'>): string => {
+    const newId = `${Date.now()}-${Math.random()}`;
     const newTransaction: Transaction = {
       ...transaction,
-      id: `${Date.now()}-${Math.random()}`,
+      id: newId,
     };
     setTransactions([...transactions, newTransaction]);
     
@@ -357,6 +358,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       updateAccountBalanceFromTransaction(newTransaction);
     }
     toast.success("Movimiento añadido");
+    return newId;
   };
 
   const updateTransaction = (id: string, updates: Partial<Transaction>) => {
