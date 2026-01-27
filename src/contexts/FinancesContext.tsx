@@ -303,6 +303,34 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
           pending: !transaction.executed,
         }));
 
+      // Get IDs of local transactions to sync
+      const localTransactionIds = transactionsToSync.map(t => t.id);
+      
+      // Get existing cloud transactions for this month
+      const { data: cloudTransactions } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('month', currentMonth);
+      
+      const cloudTransactionIds = cloudTransactions?.map(t => t.id) || [];
+      
+      // Find transactions to delete (exist in cloud but not locally)
+      const transactionsToDelete = cloudTransactionIds.filter(id => !localTransactionIds.includes(id));
+      
+      if (transactionsToDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('transactions')
+          .delete()
+          .in('id', transactionsToDelete);
+        
+        if (deleteError) {
+          console.error('❌ Error deleting transactions:', deleteError);
+        } else {
+          console.log('🗑️ Deleted transactions from cloud:', transactionsToDelete.length);
+        }
+      }
+      
       if (transactionsToSync.length > 0) {
         const { error: transError } = await supabase
           .from('transactions')
@@ -336,6 +364,34 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
           description: transfer.note || '',
         }));
 
+      // Get IDs of local transfers to sync
+      const localTransferIds = transfersToSync.map(t => t.id);
+      
+      // Get existing cloud transfers for this month
+      const { data: cloudTransfers } = await supabase
+        .from('transfers')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('month', currentMonth);
+      
+      const cloudTransferIds = cloudTransfers?.map(t => t.id) || [];
+      
+      // Find transfers to delete (exist in cloud but not locally)
+      const transfersToDelete = cloudTransferIds.filter(id => !localTransferIds.includes(id));
+      
+      if (transfersToDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('transfers')
+          .delete()
+          .in('id', transfersToDelete);
+        
+        if (deleteError) {
+          console.error('❌ Error deleting transfers:', deleteError);
+        } else {
+          console.log('🗑️ Deleted transfers from cloud:', transfersToDelete.length);
+        }
+      }
+      
       if (transfersToSync.length > 0) {
         const { error: transferError } = await supabase
           .from('transfers')
