@@ -6,6 +6,7 @@ import { Pencil, Trash2, Paperclip } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format, parse } from "date-fns";
 import { es } from "date-fns/locale";
+import { useTransactionDocumentCounts } from "@/hooks/useTransactionDocumentCounts";
 
 interface TransactionListProps {
   category: Transaction['category'];
@@ -15,6 +16,10 @@ interface TransactionListProps {
 export const TransactionList = ({ category, onEdit }: TransactionListProps) => {
   const { transactions, updateTransaction, deleteTransaction, getTransactionsByCategory } = useFinances();
   const categoryTransactions = getTransactionsByCategory(category);
+  
+  // Get transaction IDs for document count lookup
+  const transactionIds = categoryTransactions.map(t => t.id);
+  const { hasDocuments } = useTransactionDocumentCounts(transactionIds);
 
   const handleToggleExecuted = (id: string, currentStatus: boolean) => {
     updateTransaction(id, { executed: !currentStatus });
@@ -84,7 +89,7 @@ export const TransactionList = ({ category, onEdit }: TransactionListProps) => {
                 </TableCell>
               )}
               <TableCell>
-                {transaction.documents && transaction.documents.length > 0 && (
+                {((transaction.documents && transaction.documents.length > 0) || hasDocuments(transaction.id)) && (
                   <Paperclip className="h-4 w-4 text-muted-foreground" />
                 )}
               </TableCell>
