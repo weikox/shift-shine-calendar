@@ -264,6 +264,11 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       console.log('💰 Syncing transactions:', transactions.length);
       const transactionsToSync = transactions
         .filter(t => accountMapping[t.account])
+        .filter(t => {
+          // Only sync transactions with valid UUID format
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          return uuidRegex.test(t.id);
+        })
         .map(transaction => ({
           id: transaction.id,
           user_id: user.id,
@@ -271,7 +276,8 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
           description: transaction.name,
           amount: transaction.amount,
           type: transaction.category,
-          date: transaction.date,
+          // Ensure date is full format for DB
+          date: transaction.date.length === 7 ? `${transaction.date}-01` : transaction.date,
           month: currentMonth,
           pending: !transaction.executed,
         }));
@@ -292,13 +298,19 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       console.log('🔄 Syncing transfers:', transfers.length);
       const transfersToSync = transfers
         .filter(t => accountMapping[t.fromAccount] && accountMapping[t.toAccount])
+        .filter(t => {
+          // Only sync transfers with valid UUID format
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          return uuidRegex.test(t.id);
+        })
         .map(transfer => ({
           id: transfer.id,
           user_id: user.id,
           from_account_id: accountMapping[transfer.fromAccount],
           to_account_id: accountMapping[transfer.toAccount],
           amount: transfer.amount,
-          date: transfer.date,
+          // Ensure date is full format for DB
+          date: transfer.date.length === 7 ? `${transfer.date}-01` : transfer.date,
           month: currentMonth,
           description: transfer.note || '',
         }));
@@ -347,10 +359,13 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
   }, [transactions, accounts, transfers]);
 
   const addTransaction = (transaction: Omit<Transaction, 'id'>): string => {
-    const newId = `${Date.now()}-${Math.random()}`;
+    // Generate a proper UUID for cloud compatibility
+    const newId = crypto.randomUUID();
     const newTransaction: Transaction = {
       ...transaction,
       id: newId,
+      // Ensure date is a full date, not just month format
+      date: transaction.date.length === 7 ? `${transaction.date}-01` : transaction.date,
     };
     setTransactions([...transactions, newTransaction]);
     
@@ -431,7 +446,9 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
   const addTransfer = (transfer: Omit<Transfer, 'id'>) => {
     const newTransfer: Transfer = {
       ...transfer,
-      id: `transfer-${Date.now()}-${Math.random()}`,
+      id: crypto.randomUUID(),
+      // Ensure date is a full date
+      date: transfer.date.length === 7 ? `${transfer.date}-01` : transfer.date,
     };
     setTransfers([...transfers, newTransfer]);
     
