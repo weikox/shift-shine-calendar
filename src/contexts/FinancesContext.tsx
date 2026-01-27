@@ -143,15 +143,30 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       if (transactionsError) throw transactionsError;
 
       if (transactionsData) {
-        const mappedTransactions: Transaction[] = transactionsData.map(t => ({
-          id: t.id,
-          name: t.description,
-          amount: Number(t.amount),
-          account: accountIdToName[t.account_id] || t.account_id,
-          executed: !t.pending,
-          category: t.type as any,
-          date: t.date,
-        }));
+        // Extract category from description if stored as "[category] name"
+        const extractCategoryAndName = (description: string): { category: Transaction['category'], name: string } => {
+          const match = description.match(/^\[(\w+)\]\s*(.*)$/);
+          if (match) {
+            const category = match[1] as Transaction['category'];
+            const name = match[2];
+            return { category, name };
+          }
+          // Fallback: if no category in description, infer from DB type
+          return { category: 'extra', name: description };
+        };
+        
+        const mappedTransactions: Transaction[] = transactionsData.map(t => {
+          const { category, name } = extractCategoryAndName(t.description);
+          return {
+            id: t.id,
+            name: name,
+            amount: Number(t.amount),
+            account: accountIdToName[t.account_id] || t.account_id,
+            executed: !t.pending,
+            category: category,
+            date: t.date,
+          };
+        });
         setTransactions(mappedTransactions);
         
         // Calculate account balances from transactions
@@ -262,6 +277,12 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
 
       // Sync transactions in batch
       console.log('💰 Syncing transactions:', transactions.length);
+      
+      // Map app categories to DB types: 'income' -> 'ingreso', everything else -> 'gasto'
+      const mapCategoryToDbType = (category: string): string => {
+        return category === 'income' ? 'ingreso' : 'gasto';
+      };
+      
       const transactionsToSync = transactions
         .filter(t => accountMapping[t.account])
         .filter(t => {
@@ -273,9 +294,9 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
           id: transaction.id,
           user_id: user.id,
           account_id: accountMapping[transaction.account],
-          description: transaction.name,
+          description: `[${transaction.category}] ${transaction.name}`,
           amount: transaction.amount,
-          type: transaction.category,
+          type: mapCategoryToDbType(transaction.category),
           // Ensure date is full format for DB
           date: transaction.date.length === 7 ? `${transaction.date}-01` : transaction.date,
           month: currentMonth,
