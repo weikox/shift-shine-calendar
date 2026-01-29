@@ -174,6 +174,7 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       calendarDays?.forEach(day => {
         daysMap[day.date] = {
           shift: day.shift as ShiftType,
+          companions: (day as any).companions || [],
           note: day.note || undefined,
           events: []
         };
@@ -229,7 +230,7 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const currentConfig = configRef.current;
 
       // Sync days (shifts and notes)
-      const daysToSync = Object.entries(currentDays).filter(([_, data]) => data.shift || data.note);
+      const daysToSync = Object.entries(currentDays).filter(([_, data]) => data.shift || data.note || (data.companions && data.companions.length > 0));
       
       for (const [date, data] of daysToSync) {
         const { error: upsertDayError } = await supabase
@@ -239,7 +240,8 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             date,
             shift: data.shift || null,
             note: data.note || null,
-          }, {
+            companions: data.companions || [],
+          } as any, {
             // En BD existe UNIQUE(user_id, date)
             onConflict: 'user_id,date',
           });

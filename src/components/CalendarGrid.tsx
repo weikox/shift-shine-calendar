@@ -136,10 +136,14 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
                       {/* Show shifts in shifts mode */}
                       {mode === "shifts" && dayData?.shift && (
                         <div className="mt-auto">
-                          {/* Companions */}
+                          {/* Companions - one per line */}
                           {dayData.companions && dayData.companions.length > 0 && (
-                            <div className="text-[10px] text-muted-foreground truncate mb-0.5">
-                              {dayData.companions.join(", ")}
+                            <div className="text-[10px] text-muted-foreground mb-0.5 space-y-0">
+                              {dayData.companions.map((companion, idx) => (
+                                <div key={idx} className="truncate leading-tight">
+                                  {companion}
+                                </div>
+                              ))}
                             </div>
                           )}
                           <div
