@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useStorageMethod } from "@/hooks/useStorageMethod";
 import { useAuth } from "@/hooks/useAuth";
 
-export type ShiftType = "M" | "T" | "libre" | null;
+export type ShiftType = "M" | "T" | null;
 export type CalendarMode = "shifts" | "events";
 
 export type RecurrenceType = "none" | "daily" | "weekly" | "monthly" | "yearly";
@@ -21,6 +21,7 @@ export interface CalendarEvent {
 
 interface DayData {
   shift?: ShiftType;
+  companions?: string[];
   note?: string;
   events?: CalendarEvent[];
 }
@@ -32,6 +33,7 @@ interface Holiday {
 
 interface CalendarConfig {
   holidays: Holiday[];
+  companions: string[];
   shiftColors: {
     morning: string;
     afternoon: string;
@@ -44,7 +46,7 @@ interface CalendarContextType {
   mode: CalendarMode;
   setMode: (mode: CalendarMode) => void;
   days: Record<string, DayData>;
-  setDayShift: (date: string, shift: ShiftType) => void;
+  setDayShift: (date: string, shift: ShiftType, companions?: string[]) => void;
   setDayNote: (date: string, note: string) => void;
   addEvent: (event: CalendarEvent) => void;
   updateEvent: (eventId: string, updatedEvent: Partial<CalendarEvent>) => void;
@@ -76,6 +78,7 @@ const defaultHolidays: Holiday[] = [
 
 const defaultConfig: CalendarConfig = {
   holidays: defaultHolidays,
+  companions: [],
   shiftColors: {
     morning: "hsl(var(--shift-morning))",
     afternoon: "hsl(var(--shift-afternoon))",
@@ -187,6 +190,7 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (calendarConfig) {
         setConfig({
           holidays: (calendarConfig.holidays as any) || defaultHolidays,
+          companions: defaultConfig.companions,
           shiftColors: defaultConfig.shiftColors,
           cellSize: (calendarConfig.cell_size as any) || 'medium'
         });
@@ -285,10 +289,10 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [config, storageMethod]);
 
-  const setDayShift = (date: string, shift: ShiftType) => {
+  const setDayShift = (date: string, shift: ShiftType, companions?: string[]) => {
     const newDays = {
       ...days,
-      [date]: { ...days[date], shift },
+      [date]: { ...days[date], shift, companions: companions || [] },
     };
     setDays(newDays);
     saveToStorage(newDays);

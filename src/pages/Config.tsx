@@ -17,7 +17,27 @@ const Config = () => {
   const { config, updateConfig, exportData, importData } = useCalendar();
   const [newHolidayDate, setNewHolidayDate] = useState("");
   const [newHolidayName, setNewHolidayName] = useState("");
+  const [newCompanion, setNewCompanion] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAddCompanion = () => {
+    if (!newCompanion.trim()) {
+      toast.error("Introduce un nombre");
+      return;
+    }
+    if (config.companions.includes(newCompanion.trim())) {
+      toast.error("Este compañero ya existe");
+      return;
+    }
+    updateConfig({ companions: [...config.companions, newCompanion.trim()] });
+    setNewCompanion("");
+    toast.success("Compañero añadido");
+  };
+
+  const handleRemoveCompanion = (name: string) => {
+    updateConfig({ companions: config.companions.filter(c => c !== name) });
+    toast.success("Compañero eliminado");
+  };
 
   const handleAddHoliday = () => {
     if (!newHolidayDate || !newHolidayName) {
@@ -188,7 +208,55 @@ const Config = () => {
           </CardContent>
         </Card>
 
-        {/* Import/Export */}
+        {/* Companions */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Compañeros de Turno</CardTitle>
+            <CardDescription>
+              Gestiona la lista de compañeros que pueden estar en el mismo turno
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Nombre del compañero"
+                value={newCompanion}
+                onChange={(e) => setNewCompanion(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddCompanion()}
+              />
+              <Button onClick={handleAddCompanion}>
+                <Plus className="mr-2 h-4 w-4" />
+                Añadir
+              </Button>
+            </div>
+            {config.companions.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-foreground">
+                  Compañeros configurados ({config.companions.length})
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {config.companions.map((companion) => (
+                    <div
+                      key={companion}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-full"
+                    >
+                      <span className="text-sm">{companion}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => handleRemoveCompanion(companion)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Importar / Exportar</CardTitle>
@@ -326,21 +394,15 @@ const Config = () => {
               <div className="space-y-2">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-8 bg-shift-morning rounded flex items-center justify-center">
-                    <span className="text-xs font-medium text-shift-morning-foreground">M</span>
+                    <span className="text-xs font-bold text-shift-morning-foreground">M</span>
                   </div>
                   <span className="text-sm text-muted-foreground">Turno de Mañana</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-8 bg-shift-afternoon rounded flex items-center justify-center">
-                    <span className="text-xs font-medium text-shift-afternoon-foreground">T</span>
+                    <span className="text-xs font-bold text-shift-afternoon-foreground">T</span>
                   </div>
                   <span className="text-sm text-muted-foreground">Turno de Tarde</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-8 bg-day-off rounded flex items-center justify-center">
-                    <span className="text-xs font-medium text-day-off-foreground">L</span>
-                  </div>
-                  <span className="text-sm text-muted-foreground">Día Libre</span>
                 </div>
               </div>
             </div>

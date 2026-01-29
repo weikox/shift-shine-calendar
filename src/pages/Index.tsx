@@ -21,7 +21,7 @@ const Index = () => {
     
     for (let i = 0; i < 365; i++) {
       const dateStr = nextShiftDate.toISOString().split('T')[0];
-      if (days[dateStr]?.shift && days[dateStr]?.shift !== 'libre') {
+      if (days[dateStr]?.shift) {
         nextShiftDay = {
           shift: days[dateStr].shift,
           date: nextShiftDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
@@ -46,7 +46,6 @@ const Index = () => {
     if (!shift) return "Sin turno";
     if (shift === "M") return "Mañana";
     if (shift === "T") return "Tarde";
-    if (shift === "libre") return "Libre";
     return shift;
   };
 
