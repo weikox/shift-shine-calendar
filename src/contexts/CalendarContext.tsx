@@ -232,20 +232,25 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const daysToSync = Object.entries(currentDays).filter(([_, data]) => data.shift || data.note);
       
       for (const [date, data] of daysToSync) {
-        await supabase
+        const { error: upsertDayError } = await supabase
           .from('calendar_days')
           .upsert({
             user_id: user.id,
             date,
             shift: data.shift || null,
             note: data.note || null,
+          }, {
+            // En BD existe UNIQUE(user_id, date)
+            onConflict: 'user_id,date',
           });
+
+        if (upsertDayError) throw upsertDayError;
       }
 
       // Sync events
       const allEvents = getAllEvents();
       for (const event of allEvents) {
-        await supabase
+        const { error: upsertEventError } = await supabase
           .from('calendar_events')
           .upsert({
             id: event.id,
@@ -255,18 +260,27 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             start_date: event.date,
             end_date: event.date,
             recurrence: event.recurrence || null,
+          }, {
+            onConflict: 'id',
           });
+
+        if (upsertEventError) throw upsertEventError;
       }
 
       // Sync config using ref for current values
-      await supabase
+      const { error: upsertConfigError } = await supabase
         .from('calendar_config')
         .upsert({
           user_id: user.id,
           holidays: currentConfig.holidays as any,
           cell_size: currentConfig.cellSize,
           companions: currentConfig.companions,
-        } as any);
+        } as any, {
+          // En BD existe UNIQUE(user_id)
+          onConflict: 'user_id',
+        });
+
+      if (upsertConfigError) throw upsertConfigError;
 
       setLastSync(new Date());
       toast.success('Datos sincronizados con la nube');

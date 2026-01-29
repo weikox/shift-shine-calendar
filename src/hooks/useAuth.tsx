@@ -126,29 +126,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
-      // First try global signout
-      const { error } = await supabase.auth.signOut({ scope: 'global' });
-      if (error) {
-        // If global fails (session_not_found), do local signout
-        if (error.message.includes('session') || error.code === 'session_not_found') {
-          await supabase.auth.signOut({ scope: 'local' });
-          setSession(null);
-          setUser(null);
-          toast({
-            title: "Sesión cerrada",
-            description: "La sesión local ha sido cerrada",
-          });
-          return;
-        }
+      // Usamos cierre LOCAL para evitar errores tipo "Auth session missing"
+      // (que ocurren cuando el cliente no tiene refresh token válido para un logout remoto).
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+
+      // Limpiar estado siempre (aunque el SDK reporte que no había sesión)
+      setSession(null);
+      setUser(null);
+
+      // Si el error es solo porque no había sesión, lo tratamos como éxito.
+      const isMissingSession =
+        !!error &&
+        typeof error.message === 'string' &&
+        error.message.toLowerCase().includes('auth session missing');
+
+      if (error && !isMissingSession) {
         toast({
           variant: "destructive",
           title: "Error al cerrar sesión",
           description: error.message,
         });
+        return;
       }
+
+      toast({
+        title: "Sesión cerrada",
+        description: "Has cerrado sesión correctamente",
+      });
     } catch (e: any) {
-      // Fallback: force local signout
-      await supabase.auth.signOut({ scope: 'local' });
+      // Fallback best-effort
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch {
+        // ignore
+      }
       setSession(null);
       setUser(null);
     }
