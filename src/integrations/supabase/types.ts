@@ -97,6 +97,7 @@ export type Database = {
       }
       calendar_days: {
         Row: {
+          companions: string[] | null
           created_at: string | null
           date: string
           id: string
@@ -106,6 +107,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          companions?: string[] | null
           created_at?: string | null
           date: string
           id?: string
@@ -115,6 +117,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          companions?: string[] | null
           created_at?: string | null
           date?: string
           id?: string
