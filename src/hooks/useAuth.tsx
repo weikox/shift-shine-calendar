@@ -30,8 +30,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Check for existing session and validate it
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      if (error) {
+        console.error('Session error:', error);
+        // Clear invalid session from localStorage
+        await supabase.auth.signOut({ scope: 'local' });
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      
+      if (session) {
+        // Verify session is still valid by making a simple request
+        const { error: verifyError } = await supabase.auth.getUser();
+        if (verifyError) {
+          console.error('Session invalid:', verifyError);
+          // Clear invalid session
+          await supabase.auth.signOut({ scope: 'local' });
+          setSession(null);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+      }
+      
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -101,13 +125,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast({
-        variant: "destructive",
-        title: "Error al cerrar sesión",
-        description: error.message,
-      });
+    try {
+      // First try global signout
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      if (error) {
+        // If global fails (session_not_found), do local signout
+        if (error.message.includes('session') || error.code === 'session_not_found') {
+          await supabase.auth.signOut({ scope: 'local' });
+          setSession(null);
+          setUser(null);
+          toast({
+            title: "Sesión cerrada",
+            description: "La sesión local ha sido cerrada",
+          });
+          return;
+        }
+        toast({
+          variant: "destructive",
+          title: "Error al cerrar sesión",
+          description: error.message,
+        });
+      }
+    } catch (e: any) {
+      // Fallback: force local signout
+      await supabase.auth.signOut({ scope: 'local' });
+      setSession(null);
+      setUser(null);
     }
   };
 
