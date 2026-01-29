@@ -190,7 +190,7 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (calendarConfig) {
         setConfig({
           holidays: (calendarConfig.holidays as any) || defaultHolidays,
-          companions: defaultConfig.companions,
+          companions: (calendarConfig as any).companions || [],
           shiftColors: defaultConfig.shiftColors,
           cellSize: (calendarConfig.cell_size as any) || 'medium'
         });
@@ -248,7 +248,8 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           user_id: user.id,
           holidays: config.holidays as any,
           cell_size: config.cellSize,
-        });
+          companions: config.companions,
+        } as any);
 
       setLastSync(new Date());
       toast.success('Datos sincronizados con la nube');

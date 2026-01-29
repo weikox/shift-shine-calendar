@@ -68,6 +68,7 @@ export type Database = {
       calendar_config: {
         Row: {
           cell_size: string | null
+          companions: string[] | null
           created_at: string | null
           holidays: Json | null
           id: string
@@ -76,6 +77,7 @@ export type Database = {
         }
         Insert: {
           cell_size?: string | null
+          companions?: string[] | null
           created_at?: string | null
           holidays?: Json | null
           id?: string
@@ -84,6 +86,7 @@ export type Database = {
         }
         Update: {
           cell_size?: string | null
+          companions?: string[] | null
           created_at?: string | null
           holidays?: Json | null
           id?: string
