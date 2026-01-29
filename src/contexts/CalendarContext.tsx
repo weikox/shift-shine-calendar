@@ -290,7 +290,7 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Sync to cloud if needed
     if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
       if (autoSync && !pendingSync) {
-        setTimeout(() => syncToCloud(), 2000); // Debounce 2s
+        setTimeout(() => syncToCloud(), 2000);
       }
     }
   };
@@ -313,6 +313,8 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       [date]: { ...days[date], shift, companions: companions || [] },
     };
     setDays(newDays);
+    // Update ref immediately so syncToCloud has the latest value
+    daysRef.current = newDays;
     saveToStorage(newDays);
   };
 
@@ -322,12 +324,16 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       [date]: { ...days[date], note },
     };
     setDays(newDays);
+    // Update ref immediately so syncToCloud has the latest value
+    daysRef.current = newDays;
     saveToStorage(newDays);
   };
 
   const updateConfig = (newConfig: Partial<CalendarConfig>) => {
     const updatedConfig = { ...config, ...newConfig };
     setConfig(updatedConfig);
+    // Update ref immediately so syncToCloud has the latest value
+    configRef.current = updatedConfig;
     saveToStorage(days, updatedConfig);
   };
 
