@@ -77,13 +77,21 @@ export function StorageMethodProvider({ children }: { children: ReactNode }) {
 
     if (user) {
       try {
-        await supabase
+        const { error } = await supabase
           .from('app_settings')
-          .upsert({
-            user_id: user.id,
-            storage_method: method,
-            auto_sync: autoSync,
-          });
+          .upsert(
+            {
+              user_id: user.id,
+              storage_method: method,
+              auto_sync: autoSync,
+            },
+            {
+              // En BD existe UNIQUE(user_id)
+              onConflict: 'user_id',
+            }
+          );
+
+        if (error) throw error;
       } catch (error) {
         console.error('Error updating storage method:', error);
       }
@@ -96,13 +104,21 @@ export function StorageMethodProvider({ children }: { children: ReactNode }) {
 
     if (user) {
       try {
-        await supabase
+        const { error } = await supabase
           .from('app_settings')
-          .upsert({
-            user_id: user.id,
-            storage_method: storageMethod,
-            auto_sync: enabled,
-          });
+          .upsert(
+            {
+              user_id: user.id,
+              storage_method: storageMethod,
+              auto_sync: enabled,
+            },
+            {
+              // En BD existe UNIQUE(user_id)
+              onConflict: 'user_id',
+            }
+          );
+
+        if (error) throw error;
       } catch (error) {
         console.error('Error updating auto sync:', error);
       }
