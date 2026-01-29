@@ -57,9 +57,8 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
 
   const getShiftLabel = (shift: string | null | undefined) => {
     if (!shift) return null;
-    if (shift === "M") return "Mañana";
-    if (shift === "T") return "Tarde";
-    if (shift === "libre") return "Libre";
+    if (shift === "M") return "M";
+    if (shift === "T") return "T";
     return null;
   };
 
@@ -67,7 +66,6 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
     if (!shift) return "";
     if (shift === "M") return "bg-shift-morning text-shift-morning-foreground";
     if (shift === "T") return "bg-shift-afternoon text-shift-afternoon-foreground";
-    if (shift === "libre") return "bg-day-off text-day-off-foreground";
     return "";
   };
 
@@ -137,13 +135,21 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
                       
                       {/* Show shifts in shifts mode */}
                       {mode === "shifts" && dayData?.shift && (
-                        <div
-                          className={cn(
-                            "mt-auto px-2 py-1 rounded text-xs font-medium text-center",
-                            getShiftColor(dayData.shift)
+                        <div className="mt-auto">
+                          {/* Companions */}
+                          {dayData.companions && dayData.companions.length > 0 && (
+                            <div className="text-[10px] text-muted-foreground truncate mb-0.5">
+                              {dayData.companions.join(", ")}
+                            </div>
                           )}
-                        >
-                          {getShiftLabel(dayData.shift)}
+                          <div
+                            className={cn(
+                              "px-2 py-1 rounded text-xs font-bold text-center",
+                              getShiftColor(dayData.shift)
+                            )}
+                          >
+                            {getShiftLabel(dayData.shift)}
+                          </div>
                         </div>
                       )}
 
