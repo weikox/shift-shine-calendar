@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useStorageMethod } from "@/hooks/useStorageMethod";
@@ -95,6 +95,19 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [config, setConfig] = useState<CalendarConfig>(defaultConfig);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [pendingSync, setPendingSync] = useState(false);
+
+  // Refs to always have access to the latest values in async operations
+  const daysRef = useRef(days);
+  const configRef = useRef(config);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    daysRef.current = days;
+  }, [days]);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
 
   // Load initial data
   useEffect(() => {
@@ -211,8 +224,12 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     setPendingSync(true);
     try {
+      // Use refs to get the most current values
+      const currentDays = daysRef.current;
+      const currentConfig = configRef.current;
+
       // Sync days (shifts and notes)
-      const daysToSync = Object.entries(days).filter(([_, data]) => data.shift || data.note);
+      const daysToSync = Object.entries(currentDays).filter(([_, data]) => data.shift || data.note);
       
       for (const [date, data] of daysToSync) {
         await supabase
@@ -241,14 +258,14 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           });
       }
 
-      // Sync config
+      // Sync config using ref for current values
       await supabase
         .from('calendar_config')
         .upsert({
           user_id: user.id,
-          holidays: config.holidays as any,
-          cell_size: config.cellSize,
-          companions: config.companions,
+          holidays: currentConfig.holidays as any,
+          cell_size: currentConfig.cellSize,
+          companions: currentConfig.companions,
         } as any);
 
       setLastSync(new Date());
