@@ -257,7 +257,7 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       // Sync events
-      const allEvents = getAllEvents();
+      const allEvents = collectAllEventsFromDays(currentDays);
       for (const event of allEvents) {
         const { error: upsertEventError } = await supabase
           .from('calendar_events')
@@ -304,6 +304,16 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setPendingSync(false);
     }
   };
+
+  function collectAllEventsFromDays(daysObj: Record<string, DayData>): CalendarEvent[] {
+    const allEvents: CalendarEvent[] = [];
+    Object.values(daysObj).forEach((dayData) => {
+      if (dayData.events) {
+        allEvents.push(...dayData.events);
+      }
+    });
+    return allEvents;
+  }
 
   const saveToStorage = (newDays: Record<string, DayData>, newConfig?: CalendarConfig) => {
     // Always save to localStorage for instant feedback
@@ -423,13 +433,7 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const getAllEvents = (): CalendarEvent[] => {
-    const allEvents: CalendarEvent[] = [];
-    Object.values(days).forEach((dayData) => {
-      if (dayData.events) {
-        allEvents.push(...dayData.events);
-      }
-    });
-    return allEvents;
+    return collectAllEventsFromDays(days);
   };
 
   const exportData = (): string => {
