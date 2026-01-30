@@ -238,6 +238,21 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return hasShift || hasNote || hasCompanions;
   };
 
+  // Helper to validate UUID format
+  const isValidUUID = (id: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(id);
+  };
+
+  // Helper to migrate non-UUID IDs to valid UUIDs
+  const migrateEventId = (event: CalendarEvent): CalendarEvent => {
+    if (!isValidUUID(event.id)) {
+      console.warn(`Migrando evento con ID inválido: "${event.id}" -> nuevo UUID`);
+      return { ...event, id: crypto.randomUUID() };
+    }
+    return event;
+  };
+
   const syncToCloud = async () => {
     if (!user) {
       toast.error('Debes iniciar sesión para sincronizar');
@@ -252,20 +267,27 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     pendingSyncRef.current = true;
     setPendingSync(true);
+    
+    const syncErrors: string[] = [];
+    let syncedDays = 0;
+    let syncedEvents = 0;
+    let failedEvents = 0;
+
     try {
       // Use refs to get the most current values
       const currentDays = daysRef.current;
       const currentConfig = configRef.current;
 
       // Sync days (shifts/notes/companions) + deletions
-      // IMPORTANT: if a user clears a shift/note/companions locally, we must delete it in cloud,
-      // otherwise it will reappear after refresh.
       const { data: cloudDays, error: cloudDaysError } = await supabase
         .from('calendar_days')
         .select('date')
         .eq('user_id', user.id);
 
-      if (cloudDaysError) throw cloudDaysError;
+      if (cloudDaysError) {
+        syncErrors.push(`Error cargando días: ${cloudDaysError.message}`);
+        throw cloudDaysError;
+      }
 
       const cloudDates = new Set((cloudDays ?? []).map((d: any) => d.date as string));
 
@@ -280,7 +302,9 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .eq('user_id', user.id)
           .in('date', clearedDatesInCloud);
 
-        if (deleteClearedDaysError) throw deleteClearedDaysError;
+        if (deleteClearedDaysError) {
+          syncErrors.push(`Error borrando días vacíos: ${deleteClearedDaysError.message}`);
+        }
       }
 
       const daysPayload = Object.entries(currentDays)
@@ -297,34 +321,71 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const { error: upsertDaysError } = await supabase
           .from('calendar_days')
           .upsert(daysPayload as any, {
-            // En BD existe UNIQUE(user_id, date)
             onConflict: 'user_id,date',
           });
 
-        if (upsertDaysError) throw upsertDaysError;
+        if (upsertDaysError) {
+          syncErrors.push(`Error sincronizando días: ${upsertDaysError.message}`);
+        } else {
+          syncedDays = daysPayload.length;
+        }
       }
 
-      // Sync events
+      // Sync events - one by one to catch individual errors
       const allEvents = collectAllEventsFromDays(currentDays);
+      const migratedEvents: CalendarEvent[] = [];
+      
       for (const event of allEvents) {
-        const { error: upsertEventError } = await supabase
-          .from('calendar_events')
-          .upsert({
-            id: event.id,
-            user_id: user.id,
-            title: event.title,
-            description: event.description || null,
-            start_date: event.date,
-            end_date: event.date,
-            recurrence: event.recurrence || null,
-          }, {
-            onConflict: 'id',
-          });
+        // Migrate invalid IDs to UUIDs
+        const safeEvent = migrateEventId(event);
+        migratedEvents.push(safeEvent);
+        
+        try {
+          const { error: upsertEventError } = await supabase
+            .from('calendar_events')
+            .upsert({
+              id: safeEvent.id,
+              user_id: user.id,
+              title: safeEvent.title,
+              description: safeEvent.description || null,
+              start_date: safeEvent.date,
+              end_date: safeEvent.date,
+              recurrence: safeEvent.recurrence || null,
+            }, {
+              onConflict: 'id',
+            });
 
-        if (upsertEventError) throw upsertEventError;
+          if (upsertEventError) {
+            failedEvents++;
+            syncErrors.push(`Evento "${safeEvent.title}" (${safeEvent.date}): ${upsertEventError.message}`);
+          } else {
+            syncedEvents++;
+          }
+        } catch (eventError: any) {
+          failedEvents++;
+          syncErrors.push(`Evento "${safeEvent.title}" (${safeEvent.date}): ${eventError?.message || 'Error desconocido'}`);
+        }
       }
 
-      // Sync config using ref for current values
+      // Update local state with migrated events if any ID changed
+      const needsMigration = allEvents.some((e, i) => e.id !== migratedEvents[i].id);
+      if (needsMigration) {
+        const newDays = { ...currentDays };
+        Object.keys(newDays).forEach(dateStr => {
+          if (newDays[dateStr].events) {
+            newDays[dateStr].events = newDays[dateStr].events!.map(e => {
+              const migrated = migratedEvents.find(m => 
+                m.title === e.title && m.date === e.date && m.description === e.description
+              );
+              return migrated || e;
+            });
+          }
+        });
+        setDays(newDays);
+        daysRef.current = newDays;
+      }
+
+      // Sync config
       const { error: upsertConfigError } = await supabase
         .from('calendar_config')
         .upsert({
@@ -333,20 +394,46 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           cell_size: currentConfig.cellSize,
           companions: currentConfig.companions,
         } as any, {
-          // En BD existe UNIQUE(user_id)
           onConflict: 'user_id',
         });
 
-      if (upsertConfigError) throw upsertConfigError;
+      if (upsertConfigError) {
+        syncErrors.push(`Error sincronizando configuración: ${upsertConfigError.message}`);
+      }
 
       setLastSync(new Date());
-      toast.success('Datos sincronizados con la nube');
+      
+      // Show detailed feedback
+      if (syncErrors.length === 0) {
+        toast.success(`Sincronizado: ${syncedDays} días, ${syncedEvents} eventos`);
+      } else if (syncedEvents > 0 || syncedDays > 0) {
+        toast.warning(
+          `Sincronización parcial: ${syncedEvents}/${allEvents.length} eventos, ${syncedDays} días. ` +
+          `Errores: ${syncErrors.length}`,
+          { 
+            description: syncErrors.slice(0, 3).join('\n') + (syncErrors.length > 3 ? `\n...y ${syncErrors.length - 3} más` : ''),
+            duration: 8000 
+          }
+        );
+        console.error('Errores de sincronización:', syncErrors);
+      } else {
+        toast.error(
+          `Error de sincronización: ${syncErrors.length} errores`,
+          { 
+            description: syncErrors.slice(0, 3).join('\n'),
+            duration: 10000 
+          }
+        );
+        console.error('Errores de sincronización:', syncErrors);
+      }
     } catch (error) {
       console.error('Error syncing to cloud:', error);
       if (isNetworkError(error)) {
         toast.error('Error de conexión. Los datos se guardarán localmente.');
       } else {
-        toast.error('Error al sincronizar con la nube');
+        toast.error('Error al sincronizar con la nube', {
+          description: syncErrors.length > 0 ? syncErrors[0] : undefined
+        });
       }
     } finally {
       pendingSyncRef.current = false;
