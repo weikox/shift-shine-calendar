@@ -15,7 +15,13 @@ interface TransactionListProps {
 
 export const TransactionList = ({ category, onEdit }: TransactionListProps) => {
   const { transactions, updateTransaction, deleteTransaction, getTransactionsByCategory } = useFinances();
-  const categoryTransactions = getTransactionsByCategory(category);
+  const categoryTransactions = getTransactionsByCategory(category)
+    .sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return -1;
+      if (!b.date) return 1;
+      return a.date.localeCompare(b.date);
+    });
   
   // Get transaction IDs for document count lookup
   const transactionIds = categoryTransactions.map(t => t.id);

@@ -13,7 +13,14 @@ export const AccountBalanceTable = () => {
   const [showPreviousMonth, setShowPreviousMonth] = useState(true);
   const [showPending, setShowPending] = useState(true);
 
-  const accountTransactions = selectedAccount ? getAccountTransactions(selectedAccount) : [];
+  const accountTransactions = selectedAccount 
+    ? getAccountTransactions(selectedAccount).sort((a, b) => {
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return -1;
+        if (!b.date) return 1;
+        return a.date.localeCompare(b.date);
+      })
+    : [];
 
   // Helper to round to 2 decimal places to avoid floating point errors
   const round2 = (num: number) => Math.round(num * 100) / 100;
