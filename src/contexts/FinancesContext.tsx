@@ -96,9 +96,10 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       const savedAccounts = localStorage.getItem('finances-accounts');
       const savedTransfers = localStorage.getItem(`finances-transfers-${currentMonth}`);
       
-      if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
+      // Always set transactions/transfers for the current month (empty array if no data)
+      setTransactions(savedTransactions ? JSON.parse(savedTransactions) : []);
+      setTransfers(savedTransfers ? JSON.parse(savedTransfers) : []);
       if (savedAccounts) setAccounts(JSON.parse(savedAccounts));
-      if (savedTransfers) setTransfers(JSON.parse(savedTransfers));
     } else if (storageMethod === 'cloud') {
       // Load only from cloud
       await loadFromCloud();
