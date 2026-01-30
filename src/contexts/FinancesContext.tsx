@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useStorageMethod } from "@/hooks/useStorageMethod";
@@ -83,6 +83,15 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
   });
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [pendingSync, setPendingSync] = useState(false);
+  const [isLoadingMonth, setIsLoadingMonth] = useState(false);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dirtyRef = useRef(false);
+  const dirtyMonthRef = useRef<string | null>(null);
+
+  const markDirty = () => {
+    dirtyRef.current = true;
+    dirtyMonthRef.current = currentMonth;
+  };
 
   // Load initial data
   useEffect(() => {
@@ -90,22 +99,30 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
   }, [storageMethod, user, currentMonth]);
 
   const loadInitialData = async () => {
-    if (storageMethod === 'local' || !user) {
-      // Load from localStorage
-      const savedTransactions = localStorage.getItem(`finances-transactions-${currentMonth}`);
-      const savedAccounts = localStorage.getItem('finances-accounts');
-      const savedTransfers = localStorage.getItem(`finances-transfers-${currentMonth}`);
-      
-      // Always set transactions/transfers for the current month (empty array if no data)
-      setTransactions(savedTransactions ? JSON.parse(savedTransactions) : []);
-      setTransfers(savedTransfers ? JSON.parse(savedTransfers) : []);
-      if (savedAccounts) setAccounts(JSON.parse(savedAccounts));
-    } else if (storageMethod === 'cloud') {
-      // Load only from cloud
-      await loadFromCloud();
-    } else if (storageMethod === 'hybrid') {
-      // Load from cloud and fallback to local
-      await loadFromCloud();
+    // IMPORTANT: while we are switching months and hydrating state (accounts/transfers/transactions)
+    // we must not persist/sync, otherwise we can accidentally sync the previous month's transactions
+    // with the new month value.
+    setIsLoadingMonth(true);
+    try {
+      if (storageMethod === 'local' || !user) {
+        // Load from localStorage
+        const savedTransactions = localStorage.getItem(`finances-transactions-${currentMonth}`);
+        const savedAccounts = localStorage.getItem('finances-accounts');
+        const savedTransfers = localStorage.getItem(`finances-transfers-${currentMonth}`);
+
+        // Always set transactions/transfers for the current month (empty array if no data)
+        setTransactions(savedTransactions ? JSON.parse(savedTransactions) : []);
+        setTransfers(savedTransfers ? JSON.parse(savedTransfers) : []);
+        if (savedAccounts) setAccounts(JSON.parse(savedAccounts));
+      } else if (storageMethod === 'cloud') {
+        // Load only from cloud
+        await loadFromCloud();
+      } else if (storageMethod === 'hybrid') {
+        // Load from cloud and fallback to local
+        await loadFromCloud();
+      }
+    } finally {
+      setIsLoadingMonth(false);
     }
   };
 
@@ -407,6 +424,8 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
 
       setLastSync(new Date());
       console.log('✅ Cloud sync completed successfully');
+      dirtyRef.current = false;
+      dirtyMonthRef.current = null;
       toast.success('Datos financieros sincronizados con la nube');
     } catch (error) {
       console.error('❌ Error syncing to cloud:', error);
@@ -426,17 +445,31 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
 
     // Sync to cloud if needed
     if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
-      if (autoSync && !pendingSync) {
-        setTimeout(() => syncToCloud(), 2000); // Debounce 2s
+      const canAutoSyncThisMonth = dirtyRef.current && dirtyMonthRef.current === currentMonth;
+      if (canAutoSyncThisMonth && autoSync && !pendingSync) {
+        if (syncTimeoutRef.current) {
+          clearTimeout(syncTimeoutRef.current);
+        }
+        syncTimeoutRef.current = setTimeout(() => syncToCloud(), 2000); // Debounce 2s
       }
     }
   };
 
   useEffect(() => {
+    if (isLoadingMonth) return;
     saveToStorage();
-  }, [transactions, accounts, transfers]);
+  }, [transactions, accounts, transfers, isLoadingMonth]);
+
+  // If the user changes month while a sync is pending, cancel the debounce to avoid stale syncs.
+  useEffect(() => {
+    if (isLoadingMonth && syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = null;
+    }
+  }, [isLoadingMonth]);
 
   const addTransaction = (transaction: Omit<Transaction, 'id'>): string => {
+    markDirty();
     // Generate a proper UUID for cloud compatibility
     const newId = crypto.randomUUID();
     const newTransaction: Transaction = {
@@ -455,6 +488,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateTransaction = (id: string, updates: Partial<Transaction>) => {
+    markDirty();
     const oldTransaction = transactions.find(t => t.id === id);
     if (!oldTransaction) return;
     
@@ -498,6 +532,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteTransaction = (id: string) => {
+    markDirty();
     const transaction = transactions.find(t => t.id === id);
     if (transaction && transaction.executed) {
       updateAccountBalanceFromTransaction(transaction, 'remove');
@@ -522,6 +557,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addTransfer = (transfer: Omit<Transfer, 'id'>) => {
+    markDirty();
     const newTransfer: Transfer = {
       ...transfer,
       id: crypto.randomUUID(),
@@ -552,6 +588,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     
     const prevTransactions = localStorage.getItem(`finances-transactions-${prevMonth}`);
     if (prevTransactions) {
+      markDirty();
       const parsedTransactions = JSON.parse(prevTransactions);
       const pendingTransactions = parsedTransactions
         .filter((t: Transaction) => !t.executed)
@@ -573,6 +610,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateAccountBalance = (accountName: string, newBalance: number) => {
+    markDirty();
     setAccounts(prevAccounts => 
       prevAccounts.map(acc => 
         acc.name === accountName ? { ...acc, balance: newBalance } : acc
@@ -614,6 +652,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
   const importData = (jsonData: string) => {
     try {
       const data = JSON.parse(jsonData);
+      markDirty();
       if (data.transactions) setTransactions(data.transactions);
       if (data.accounts) setAccounts(data.accounts);
       if (data.transfers) setTransfers(data.transfers);
@@ -628,6 +667,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       toast.error("Ya existe una cuenta con ese nombre");
       return;
     }
+    markDirty();
     setAccounts([...accounts, { name, balance: 0 }]);
     toast.success("Cuenta añadida");
   };
@@ -638,6 +678,8 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       toast.error("Ya existe una cuenta con ese nombre");
       return;
     }
+
+    markDirty();
     
     setAccounts(prevAccounts => 
       prevAccounts.map(acc => 
@@ -670,6 +712,8 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       toast.error("No se puede eliminar una cuenta con movimientos asociados");
       return;
     }
+
+    markDirty();
     
     setAccounts(accounts.filter(acc => acc.name !== name));
     toast.success("Cuenta eliminada");
