@@ -54,7 +54,8 @@ export const EventsManager = () => {
       toast.success("Evento actualizado");
     } else {
       const newEvent: CalendarEvent = {
-        id: `${Date.now()}-${Math.random()}`,
+        // IMPORTANT: backend expects UUID (column type uuid). Non-UUID ids will fail to persist.
+        id: crypto.randomUUID(),
         title: title.trim(),
         description: description.trim(),
         time: time || undefined,

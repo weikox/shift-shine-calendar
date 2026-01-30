@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useCalendar, CalendarEvent, RecurrenceType } from "@/contexts/CalendarContext";
 import {
   Dialog,
@@ -60,7 +60,8 @@ export const EventDialog = ({ selectedDate, open, onOpenChange }: EventDialogPro
     } else {
       // Add new event
       const newEvent: CalendarEvent = {
-        id: `${Date.now()}-${Math.random()}`,
+        // IMPORTANT: backend expects UUID (column type uuid). Non-UUID ids will fail to persist.
+        id: crypto.randomUUID(),
         title: title.trim(),
         description: description.trim(),
         time: time || undefined,
