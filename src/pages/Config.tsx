@@ -5,18 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Plus, Trash2, Download, Upload } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Download, Upload, CalendarDays, PartyPopper, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import { EventsManager } from "@/components/EventsManager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StorageSettings } from "@/components/StorageSettings";
 import * as XLSX from "xlsx";
 
 const Config = () => {
   const navigate = useNavigate();
-  const { config, updateConfig, exportData, importData } = useCalendar();
-  const [newHolidayDate, setNewHolidayDate] = useState("");
-  const [newHolidayName, setNewHolidayName] = useState("");
+  const { config, updateConfig, exportData, importData, getAllEvents } = useCalendar();
   const [newCompanion, setNewCompanion] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -37,29 +34,6 @@ const Config = () => {
   const handleRemoveCompanion = (name: string) => {
     updateConfig({ companions: config.companions.filter(c => c !== name) });
     toast.success("Compañero eliminado");
-  };
-
-  const handleAddHoliday = () => {
-    if (!newHolidayDate || !newHolidayName) {
-      toast.error("Por favor completa todos los campos");
-      return;
-    }
-
-    const updatedHolidays = [
-      ...config.holidays,
-      { date: newHolidayDate, name: newHolidayName },
-    ].sort((a, b) => a.date.localeCompare(b.date));
-
-    updateConfig({ holidays: updatedHolidays });
-    setNewHolidayDate("");
-    setNewHolidayName("");
-    toast.success("Festivo añadido correctamente");
-  };
-
-  const handleRemoveHoliday = (dateToRemove: string) => {
-    const updatedHolidays = config.holidays.filter((h) => h.date !== dateToRemove);
-    updateConfig({ holidays: updatedHolidays });
-    toast.success("Festivo eliminado");
   };
 
   const handleExportData = (format: "json" | "csv" | "excel") => {
@@ -155,6 +129,8 @@ const Config = () => {
     }
   };
 
+  const eventsCount = getAllEvents().length;
+
   return (
     <div className="min-h-screen bg-background">
       <header className="bg-card border-b border-border px-6 py-4">
@@ -172,8 +148,48 @@ const Config = () => {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-        {/* Events Manager */}
-        <EventsManager />
+        {/* Navigation cards to subpages */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card 
+            className="cursor-pointer hover:bg-secondary/50 transition-colors"
+            onClick={() => navigate("/config/eventos")}
+          >
+            <CardContent className="flex items-center justify-between p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-primary/10 rounded-lg">
+                  <CalendarDays className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground">Eventos</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {eventsCount} evento{eventsCount !== 1 ? "s" : ""} configurado{eventsCount !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </CardContent>
+          </Card>
+
+          <Card 
+            className="cursor-pointer hover:bg-secondary/50 transition-colors"
+            onClick={() => navigate("/config/festivos")}
+          >
+            <CardContent className="flex items-center justify-between p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-holiday/10 rounded-lg">
+                  <PartyPopper className="h-6 w-6 text-holiday" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground">Festivos</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {config.holidays.length} festivo{config.holidays.length !== 1 ? "s" : ""} configurado{config.holidays.length !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Display Settings */}
         <Card>
@@ -303,79 +319,6 @@ const Config = () => {
               <p className="text-xs text-muted-foreground">
                 Soporta archivos .json, .csv y .xlsx
               </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Holidays */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Festivos</CardTitle>
-            <CardDescription>
-              Gestiona los días festivos que se mostrarán en el calendario
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Add new holiday */}
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="holiday-date">Fecha</Label>
-                  <Input
-                    id="holiday-date"
-                    type="date"
-                    value={newHolidayDate}
-                    onChange={(e) => setNewHolidayDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="holiday-name">Nombre</Label>
-                  <Input
-                    id="holiday-name"
-                    placeholder="Ej: Día de Reyes"
-                    value={newHolidayName}
-                    onChange={(e) => setNewHolidayName(e.target.value)}
-                  />
-                </div>
-              </div>
-              <Button onClick={handleAddHoliday} className="w-full md:w-auto">
-                <Plus className="mr-2 h-4 w-4" />
-                Añadir festivo
-              </Button>
-            </div>
-
-            {/* List of holidays */}
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium text-foreground">
-                Festivos configurados ({config.holidays.length})
-              </h3>
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {config.holidays.map((holiday) => (
-                  <div
-                    key={holiday.date}
-                    className="flex items-center justify-between p-3 bg-secondary rounded-lg"
-                  >
-                    <div>
-                      <p className="font-medium text-foreground">{holiday.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(holiday.date + "T00:00:00").toLocaleDateString("es-ES", {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRemoveHoliday(holiday.date)}
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
             </div>
           </CardContent>
         </Card>
