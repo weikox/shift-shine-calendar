@@ -224,6 +224,15 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return false;
   };
 
+  const normalizeNote = (note?: string | null) => (note ?? "").trim();
+
+  const hasDayCloudData = (data: DayData) => {
+    const hasShift = data.shift === "M" || data.shift === "T";
+    const hasNote = normalizeNote(data.note).length > 0;
+    const hasCompanions = (data.companions?.length ?? 0) > 0;
+    return hasShift || hasNote || hasCompanions;
+  };
+
   const syncToCloud = async () => {
     if (!user) {
       toast.error('Debes iniciar sesión para sincronizar');
@@ -236,24 +245,51 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const currentDays = daysRef.current;
       const currentConfig = configRef.current;
 
-      // Sync days (shifts and notes)
-      const daysToSync = Object.entries(currentDays).filter(([_, data]) => data.shift || data.note || (data.companions && data.companions.length > 0));
-      
-      for (const [date, data] of daysToSync) {
-        const { error: upsertDayError } = await supabase
+      // Sync days (shifts/notes/companions) + deletions
+      // IMPORTANT: if a user clears a shift/note/companions locally, we must delete it in cloud,
+      // otherwise it will reappear after refresh.
+      const { data: cloudDays, error: cloudDaysError } = await supabase
+        .from('calendar_days')
+        .select('date')
+        .eq('user_id', user.id);
+
+      if (cloudDaysError) throw cloudDaysError;
+
+      const cloudDates = new Set((cloudDays ?? []).map((d: any) => d.date as string));
+
+      const clearedDatesInCloud = Object.entries(currentDays)
+        .filter(([date, data]) => !!data && cloudDates.has(date) && !hasDayCloudData(data))
+        .map(([date]) => date);
+
+      if (clearedDatesInCloud.length > 0) {
+        const { error: deleteClearedDaysError } = await supabase
           .from('calendar_days')
-          .upsert({
-            user_id: user.id,
-            date,
-            shift: data.shift || null,
-            note: data.note || null,
-            companions: data.companions || [],
-          } as any, {
+          .delete()
+          .eq('user_id', user.id)
+          .in('date', clearedDatesInCloud);
+
+        if (deleteClearedDaysError) throw deleteClearedDaysError;
+      }
+
+      const daysPayload = Object.entries(currentDays)
+        .filter(([_, data]) => !!data && hasDayCloudData(data))
+        .map(([date, data]) => ({
+          user_id: user.id,
+          date,
+          shift: data.shift ?? null,
+          note: normalizeNote(data.note) || null,
+          companions: data.companions || [],
+        }));
+
+      if (daysPayload.length > 0) {
+        const { error: upsertDaysError } = await supabase
+          .from('calendar_days')
+          .upsert(daysPayload as any, {
             // En BD existe UNIQUE(user_id, date)
             onConflict: 'user_id,date',
           });
 
-        if (upsertDayError) throw upsertDayError;
+        if (upsertDaysError) throw upsertDaysError;
       }
 
       // Sync events
