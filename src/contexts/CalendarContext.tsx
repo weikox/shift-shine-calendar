@@ -96,6 +96,11 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [pendingSync, setPendingSync] = useState(false);
 
+  // Sync scheduling/queueing (prevents losing changes made while a sync is running)
+  const pendingSyncRef = useRef(false);
+  const queuedSyncRef = useRef(false);
+  const syncTimeoutRef = useRef<number | null>(null);
+
   // Refs to always have access to the latest values in async operations
   const daysRef = useRef(days);
   const configRef = useRef(config);
@@ -239,6 +244,13 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
 
+    // If a sync is already running, queue another run.
+    if (pendingSyncRef.current) {
+      queuedSyncRef.current = true;
+      return;
+    }
+
+    pendingSyncRef.current = true;
     setPendingSync(true);
     try {
       // Use refs to get the most current values
@@ -337,9 +349,45 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         toast.error('Error al sincronizar con la nube');
       }
     } finally {
+      pendingSyncRef.current = false;
       setPendingSync(false);
+
+      // If something changed while we were syncing, run one more time.
+      if (queuedSyncRef.current) {
+        queuedSyncRef.current = false;
+        scheduleAutoSync(0);
+      }
     }
   };
+
+  function scheduleAutoSync(delayOverride?: number) {
+    if (!user) return;
+    if (!(storageMethod === 'cloud' || storageMethod === 'hybrid')) return;
+    if (!autoSync) return;
+
+    // If a sync is running, queue it to run again when finished.
+    if (pendingSyncRef.current) {
+      queuedSyncRef.current = true;
+      return;
+    }
+
+    if (syncTimeoutRef.current) {
+      window.clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = null;
+    }
+
+    const delay =
+      typeof delayOverride === 'number'
+        ? delayOverride
+        : storageMethod === 'cloud'
+          ? 400
+          : 1200;
+
+    syncTimeoutRef.current = window.setTimeout(() => {
+      syncTimeoutRef.current = null;
+      void syncToCloud();
+    }, delay);
+  }
 
   function collectAllEventsFromDays(daysObj: Record<string, DayData>): CalendarEvent[] {
     const allEvents: CalendarEvent[] = [];
@@ -361,11 +409,7 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     // Sync to cloud if needed
-    if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
-      if (autoSync && !pendingSync) {
-        setTimeout(() => syncToCloud(), 2000);
-      }
-    }
+    scheduleAutoSync();
   };
 
   useEffect(() => {
