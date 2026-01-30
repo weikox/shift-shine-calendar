@@ -376,6 +376,8 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       },
     };
     setDays(newDays);
+    // Update ref immediately so syncToCloud has the latest value
+    daysRef.current = newDays;
     saveToStorage(newDays);
   };
 
@@ -389,6 +391,8 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     });
     setDays(newDays);
+    // Update ref immediately so syncToCloud has the latest value
+    daysRef.current = newDays;
     saveToStorage(newDays);
   };
 
@@ -402,6 +406,8 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     });
     setDays(newDays);
+    // Update ref immediately so syncToCloud has the latest value
+    daysRef.current = newDays;
     saveToStorage(newDays);
   };
 
