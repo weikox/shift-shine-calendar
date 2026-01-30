@@ -49,12 +49,20 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
   const [executed, setExecuted] = useState(false);
   const [transactionDate, setTransactionDate] = useState<Date>(() => new Date());
   const [periodicity, setPeriodicity] = useState<'monthly' | 'quarterly' | 'annual'>('monthly');
+  const [selectedCategory, setSelectedCategory] = useState<Transaction['category']>(category);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [viewingDoc, setViewingDoc] = useState<string | null>(null);
   const [processingOCR, setProcessingOCR] = useState(false);
   const [loadingDocs, setLoadingDocs] = useState(false);
 
   const isCloudMode = storageMethod === 'cloud' || storageMethod === 'hybrid';
+  
+  // Sync selectedCategory when category prop changes (for new transactions)
+  useEffect(() => {
+    if (!transactionId) {
+      setSelectedCategory(category);
+    }
+  }, [category, transactionId]);
 
   useEffect(() => {
     const loadTransaction = async () => {
@@ -65,6 +73,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
           setAmount(transaction.amount.toString());
           setAccount(transaction.account);
           setExecuted(transaction.executed);
+          setSelectedCategory(transaction.category);
           
           if (transaction.date) {
             try {
@@ -105,6 +114,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
     setExecuted(false);
     setTransactionDate(new Date());
     setPeriodicity('monthly');
+    setSelectedCategory(category);
     setDocuments([]);
   };
 
@@ -231,9 +241,9 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
       amount: parseFloat(amount),
       account,
       executed,
-      category,
+      category: selectedCategory,
       date: format(transactionDate, "yyyy-MM-dd"),
-      ...(category === 'periodic' && { periodicity }),
+      ...(selectedCategory === 'periodic' && { periodicity }),
       // Only include documents in local mode
       ...(!isCloudMode && localDocs.length > 0 && { documents: localDocs }),
     };
@@ -265,10 +275,26 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {transactionId ? 'Editar' : 'Añadir'} {category === 'income' ? 'Ingreso' : 'Gasto'}
+              {transactionId ? 'Editar' : 'Añadir'} {selectedCategory === 'income' ? 'Ingreso' : 'Gasto'}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="category">Categoría</Label>
+              <Select value={selectedCategory} onValueChange={(v) => setSelectedCategory(v as Transaction['category'])}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">Gasto Fijo</SelectItem>
+                  <SelectItem value="periodic">Gasto Periódico</SelectItem>
+                  <SelectItem value="extra">Gasto Extra</SelectItem>
+                  <SelectItem value="daily">Gasto Diario</SelectItem>
+                  <SelectItem value="income">Ingreso</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div>
               <Label htmlFor="name">Nombre</Label>
               <Input
@@ -334,7 +360,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
               </Popover>
             </div>
 
-            {category === 'periodic' && (
+            {selectedCategory === 'periodic' && (
               <div>
                 <Label htmlFor="periodicity">Periodicidad</Label>
                 <Select value={periodicity} onValueChange={(v: any) => setPeriodicity(v)}>
