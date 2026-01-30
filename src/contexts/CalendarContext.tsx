@@ -217,6 +217,13 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const isNetworkError = (error: unknown): boolean => {
+    if (error instanceof TypeError && error.message.toLowerCase().includes('failed to fetch')) {
+      return true;
+    }
+    return false;
+  };
+
   const syncToCloud = async () => {
     if (!user) {
       toast.error('Debes iniciar sesión para sincronizar');
@@ -288,7 +295,11 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       toast.success('Datos sincronizados con la nube');
     } catch (error) {
       console.error('Error syncing to cloud:', error);
-      toast.error('Error al sincronizar con la nube');
+      if (isNetworkError(error)) {
+        toast.error('Error de conexión. Los datos se guardarán localmente.');
+      } else {
+        toast.error('Error al sincronizar con la nube');
+      }
     } finally {
       setPendingSync(false);
     }
