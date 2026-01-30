@@ -64,16 +64,16 @@ interface CalendarContextType {
 
 const CalendarContext = createContext<CalendarContextType | undefined>(undefined);
 
+// Holiday dates in MM-DD format for annual recurrence
 const defaultHolidays: Holiday[] = [
-  { date: "2025-01-01", name: "Año Nuevo" },
-  { date: "2025-01-06", name: "Reyes Magos" },
-  { date: "2025-04-18", name: "Viernes Santo" },
-  { date: "2025-05-01", name: "Día del Trabajo" },
-  { date: "2025-08-15", name: "Asunción" },
-  { date: "2025-10-12", name: "Día de la Hispanidad" },
-  { date: "2025-11-01", name: "Todos los Santos" },
-  { date: "2025-12-06", name: "Día de la Constitución" },
-  { date: "2025-12-25", name: "Navidad" },
+  { date: "01-01", name: "Año Nuevo" },
+  { date: "01-06", name: "Reyes Magos" },
+  { date: "05-01", name: "Día del Trabajo" },
+  { date: "08-15", name: "Asunción" },
+  { date: "10-12", name: "Día de la Hispanidad" },
+  { date: "11-01", name: "Todos los Santos" },
+  { date: "12-06", name: "Día de la Constitución" },
+  { date: "12-25", name: "Navidad" },
 ];
 
 const defaultConfig: CalendarConfig = {
@@ -354,8 +354,16 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const isHoliday = (date: Date): Holiday | undefined => {
-    const dateStr = date.toISOString().split("T")[0];
-    return config.holidays.find((h) => h.date === dateStr);
+    // Extract month-day from the date for annual comparison
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const monthDay = `${month}-${day}`;
+    
+    return config.holidays.find((h) => {
+      // Support both MM-DD and legacy YYYY-MM-DD formats
+      const holidayMonthDay = h.date.length === 5 ? h.date : h.date.slice(5);
+      return holidayMonthDay === monthDay;
+    });
   };
 
   const addEvent = (event: CalendarEvent) => {

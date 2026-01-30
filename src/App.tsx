@@ -10,6 +10,8 @@ import { FinancesProvider } from "./contexts/FinancesContext";
 import Index from "./pages/Index";
 import Calendar from "./pages/Calendar";
 import Config from "./pages/Config";
+import ConfigEvents from "./pages/ConfigEvents";
+import ConfigHolidays from "./pages/ConfigHolidays";
 import Finances from "./pages/Finances";
 import Auth from "./pages/Auth";
 import Pizarra from "./pages/Pizarra";
@@ -33,6 +35,8 @@ const App = () => (
                   <Route path="/" element={<Index />} />
                   <Route path="/calendar" element={<Calendar />} />
                   <Route path="/config" element={<Config />} />
+                  <Route path="/config/eventos" element={<ConfigEvents />} />
+                  <Route path="/config/festivos" element={<ConfigHolidays />} />
                   <Route path="/cuentas" element={<Finances />} />
                   <Route path="/pizarra" element={<Pizarra />} />
                   <Route path="/nevera" element={<Nevera />} />
