@@ -21,6 +21,7 @@ export const ShiftDialog = ({ selectedDate, open, onOpenChange }: ShiftDialogPro
   const { days, setDayShift, config } = useCalendar();
   const [selectedShift, setSelectedShift] = useState<ShiftType>(null);
   const [selectedCompanions, setSelectedCompanions] = useState<string[]>([]);
+  const [isHolidayShift, setIsHolidayShift] = useState(false);
 
   const dateStr = selectedDate ? selectedDate.toISOString().split("T")[0] : "";
   const dayData = days[dateStr];
@@ -29,6 +30,7 @@ export const ShiftDialog = ({ selectedDate, open, onOpenChange }: ShiftDialogPro
     if (open && selectedDate) {
       setSelectedShift(dayData?.shift || null);
       setSelectedCompanions(dayData?.companions || []);
+      setIsHolidayShift(dayData?.isHolidayShift || false);
     }
   }, [open, selectedDate, dayData]);
 
@@ -47,12 +49,12 @@ export const ShiftDialog = ({ selectedDate, open, onOpenChange }: ShiftDialogPro
   };
 
   const handleSave = () => {
-    setDayShift(dateStr, selectedShift, selectedShift ? selectedCompanions : []);
+    setDayShift(dateStr, selectedShift, selectedShift ? selectedCompanions : [], selectedShift ? isHolidayShift : false);
     onOpenChange(false);
   };
 
   const handleClear = () => {
-    setDayShift(dateStr, null, []);
+    setDayShift(dateStr, null, [], false);
     onOpenChange(false);
   };
 
@@ -104,6 +106,29 @@ export const ShiftDialog = ({ selectedDate, open, onOpenChange }: ShiftDialogPro
               </Button>
             ))}
           </div>
+
+          {/* Holiday shift toggle */}
+          {selectedShift && (
+            <label
+              className={cn(
+                "flex items-center gap-2 p-3 rounded-md border cursor-pointer transition-colors",
+                isHolidayShift 
+                  ? "bg-holiday/10 border-holiday" 
+                  : "border-border hover:bg-muted"
+              )}
+            >
+              <Checkbox
+                checked={isHolidayShift}
+                onCheckedChange={(checked) => setIsHolidayShift(checked === true)}
+              />
+              <span className="text-sm font-medium">Turno en festivo</span>
+              {isHolidayShift && (
+                <span className="ml-auto text-sm font-bold text-holiday">
+                  {selectedShift}F
+                </span>
+              )}
+            </label>
+          )}
 
           {/* Companions list */}
           {config.companions.length > 0 && selectedShift && (

@@ -24,6 +24,7 @@ interface DayData {
   companions?: string[];
   note?: string;
   events?: CalendarEvent[];
+  isHolidayShift?: boolean;
 }
 
 interface Holiday {
@@ -46,7 +47,7 @@ interface CalendarContextType {
   mode: CalendarMode;
   setMode: (mode: CalendarMode) => void;
   days: Record<string, DayData>;
-  setDayShift: (date: string, shift: ShiftType, companions?: string[]) => void;
+  setDayShift: (date: string, shift: ShiftType, companions?: string[], isHolidayShift?: boolean) => void;
   setDayNote: (date: string, note: string) => void;
   addEvent: (event: CalendarEvent) => void;
   updateEvent: (eventId: string, updatedEvent: Partial<CalendarEvent>) => void;
@@ -181,6 +182,7 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           shift: day.shift as ShiftType,
           companions: (day as any).companions || [],
           note: day.note || undefined,
+          isHolidayShift: (day as any).is_holiday_shift || false,
           events: []
         };
       });
@@ -315,6 +317,7 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           shift: data.shift ?? null,
           note: normalizeNote(data.note) || null,
           companions: data.companions || [],
+          is_holiday_shift: data.isHolidayShift || false,
         }));
 
       if (daysPayload.length > 0) {
@@ -511,10 +514,10 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [config, storageMethod]);
 
-  const setDayShift = (date: string, shift: ShiftType, companions?: string[]) => {
+  const setDayShift = (date: string, shift: ShiftType, companions?: string[], isHolidayShift?: boolean) => {
     const newDays = {
       ...days,
-      [date]: { ...days[date], shift, companions: companions || [] },
+      [date]: { ...days[date], shift, companions: companions || [], isHolidayShift: isHolidayShift || false },
     };
     setDays(newDays);
     // Update ref immediately so syncToCloud has the latest value
