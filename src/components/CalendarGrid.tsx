@@ -55,15 +55,22 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
     setSelectedDate(date);
   };
 
-  const getShiftLabel = (shift: string | null | undefined) => {
+  const getShiftLabel = (shift: string | null | undefined, isHolidayShift?: boolean) => {
     if (!shift) return null;
+    if (isHolidayShift) {
+      if (shift === "M") return "MF";
+      if (shift === "T") return "TF";
+    }
     if (shift === "M") return "M";
     if (shift === "T") return "T";
     return null;
   };
 
-  const getShiftColor = (shift: string | null | undefined) => {
+  const getShiftColor = (shift: string | null | undefined, isHolidayShift?: boolean) => {
     if (!shift) return "";
+    if (isHolidayShift) {
+      return "bg-holiday/20 text-holiday";
+    }
     if (shift === "M") return "bg-shift-morning text-shift-morning-foreground";
     if (shift === "T") return "bg-shift-afternoon text-shift-afternoon-foreground";
     return "";
@@ -149,10 +156,10 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
                           <div
                             className={cn(
                               "px-2 py-1 rounded text-xs font-bold text-center",
-                              getShiftColor(dayData.shift)
+                              getShiftColor(dayData.shift, dayData.isHolidayShift)
                             )}
                           >
-                            {getShiftLabel(dayData.shift)}
+                            {getShiftLabel(dayData.shift, dayData.isHolidayShift)}
                           </div>
                         </div>
                       )}
