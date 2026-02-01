@@ -69,7 +69,8 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
   const getShiftColor = (shift: string | null | undefined, isHolidayShift?: boolean) => {
     if (!shift) return "";
     if (isHolidayShift) {
-      return "bg-holiday/20 text-holiday";
+      if (shift === "M") return "bg-shift-morning text-holiday";
+      if (shift === "T") return "bg-shift-afternoon text-holiday";
     }
     if (shift === "M") return "bg-shift-morning text-shift-morning-foreground";
     if (shift === "T") return "bg-shift-afternoon text-shift-afternoon-foreground";
