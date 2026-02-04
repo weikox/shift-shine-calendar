@@ -7,20 +7,66 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
+interface AccountMovement {
+  id: string;
+  name: string;
+  amount: number;
+  category: string;
+  executed: boolean;
+  date: string;
+  type: 'transaction' | 'transfer';
+  isIncome: boolean;
+}
+
 export const AccountBalanceTable = () => {
-  const { accounts, transactions, getAccountTransactions, getPreviousMonthBalanceByAccount, getPendingByAccount } = useFinances();
+  const { 
+    accounts, 
+    getAccountTransactions, 
+    getTransfersByAccount,
+    getPreviousMonthBalanceByAccount, 
+    getPendingByAccount,
+    getTransfersBalanceByAccount 
+  } = useFinances();
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [showPreviousMonth, setShowPreviousMonth] = useState(true);
   const [showPending, setShowPending] = useState(true);
 
-  const accountTransactions = selectedAccount 
-    ? getAccountTransactions(selectedAccount).sort((a, b) => {
-        if (!a.date && !b.date) return 0;
-        if (!a.date) return -1;
-        if (!b.date) return 1;
-        return a.date.localeCompare(b.date);
-      })
-    : [];
+  // Get all movements (transactions + transfers) for selected account
+  const getAccountMovements = (accountName: string): AccountMovement[] => {
+    const transactions = getAccountTransactions(accountName);
+    const transfers = getTransfersByAccount(accountName);
+    
+    const transactionMovements: AccountMovement[] = transactions.map(t => ({
+      id: t.id,
+      name: t.name,
+      amount: t.amount,
+      category: t.category,
+      executed: t.executed,
+      date: t.date,
+      type: 'transaction' as const,
+      isIncome: t.category === 'income',
+    }));
+    
+    const transferMovements: AccountMovement[] = transfers.map(t => ({
+      id: t.id,
+      name: t.note || `Traspaso ${t.type === 'in' ? 'desde' : 'a'} ${t.type === 'in' ? t.fromAccount : t.toAccount}`,
+      amount: t.amount,
+      category: 'transfer',
+      executed: true, // Transfers are always executed
+      date: t.date,
+      type: 'transfer' as const,
+      isIncome: t.type === 'in',
+    }));
+    
+    return [...transactionMovements, ...transferMovements].sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return -1;
+      if (!b.date) return 1;
+      return a.date.localeCompare(b.date);
+    });
+  };
+
+  const accountMovements = selectedAccount ? getAccountMovements(selectedAccount) : [];
 
   // Helper to round to 2 decimal places to avoid floating point errors
   const round2 = (num: number) => Math.round(num * 100) / 100;
@@ -30,10 +76,11 @@ export const AccountBalanceTable = () => {
     const balance = round2(account.balance);
     const previousMonth = round2(getPreviousMonthBalanceByAccount(account.name));
     const pending = round2(getPendingByAccount(account.name));
+    const transfersBalance = round2(getTransfersBalanceByAccount(account.name));
     const total = round2(balance + 
       (showPreviousMonth ? previousMonth : 0) + 
       (showPending ? pending : 0));
-    return { name: account.name, balance, previousMonth, pending, total };
+    return { name: account.name, balance, previousMonth, pending, transfersBalance, total };
   });
 
   // Calculate totals by summing the rounded individual values
@@ -41,6 +88,18 @@ export const AccountBalanceTable = () => {
   const totalPreviousMonth = round2(accountData.reduce((sum, acc) => sum + acc.previousMonth, 0));
   const totalPending = round2(accountData.reduce((sum, acc) => sum + acc.pending, 0));
   const grandTotal = round2(accountData.reduce((sum, acc) => sum + acc.total, 0));
+
+  const getCategoryLabel = (category: string) => {
+    switch (category) {
+      case 'fixed': return 'Fijo';
+      case 'periodic': return 'Periódico';
+      case 'extra': return 'Extra';
+      case 'daily': return 'Diario';
+      case 'income': return 'Ingreso';
+      case 'transfer': return 'Traspaso';
+      default: return category;
+    }
+  };
 
   return (
     <>
@@ -153,7 +212,7 @@ export const AccountBalanceTable = () => {
             <DialogTitle>Movimientos de {selectedAccount}</DialogTitle>
           </DialogHeader>
           <div className="max-h-96 overflow-y-auto">
-            {accountTransactions.length === 0 ? (
+            {accountMovements.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">
                 No hay movimientos en esta cuenta
               </p>
@@ -161,6 +220,7 @@ export const AccountBalanceTable = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Fecha</TableHead>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Categoría</TableHead>
                     <TableHead className="text-right">Cantidad</TableHead>
@@ -168,26 +228,25 @@ export const AccountBalanceTable = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {accountTransactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell className="font-medium">{transaction.name}</TableCell>
+                  {accountMovements.map((movement) => (
+                    <TableRow key={`${movement.type}-${movement.id}`}>
+                      <TableCell className="text-muted-foreground">
+                        {movement.date || '-'}
+                      </TableCell>
+                      <TableCell className="font-medium">{movement.name}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">
-                          {transaction.category === 'fixed' && 'Fijo'}
-                          {transaction.category === 'periodic' && 'Periódico'}
-                          {transaction.category === 'extra' && 'Extra'}
-                          {transaction.category === 'daily' && 'Diario'}
-                          {transaction.category === 'income' && 'Ingreso'}
+                        <Badge variant={movement.type === 'transfer' ? 'secondary' : 'outline'}>
+                          {getCategoryLabel(movement.category)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <span className={transaction.category === 'income' ? 'text-green-600' : 'text-red-600'}>
-                          {transaction.category === 'income' ? '+' : '-'}{transaction.amount.toFixed(2)}€
+                        <span className={movement.isIncome ? 'text-green-600' : 'text-red-600'}>
+                          {movement.isIncome ? '+' : '-'}{movement.amount.toFixed(2)}€
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={transaction.executed ? 'default' : 'secondary'}>
-                          {transaction.executed ? 'Ejecutado' : 'Pendiente'}
+                        <Badge variant={movement.executed ? 'default' : 'secondary'}>
+                          {movement.executed ? 'Ejecutado' : 'Pendiente'}
                         </Badge>
                       </TableCell>
                     </TableRow>
