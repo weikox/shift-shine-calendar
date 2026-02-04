@@ -46,12 +46,14 @@ interface FinancesContextType {
   updateTransaction: (id: string, transaction: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
   addTransfer: (transfer: Omit<Transfer, 'id'>) => void;
+  deleteTransfer: (id: string) => void;
   loadPreviousMonth: () => void;
   exportData: (format: 'json' | 'csv' | 'xlsx') => void;
   importData: (data: string) => void;
   setCurrentMonth: (month: string) => void;
   getTransactionsByCategory: (category: Transaction['category']) => Transaction[];
   getAccountTransactions: (accountName: string) => Transaction[];
+  getTransfersByAccount: (accountName: string) => Array<Transfer & { type: 'in' | 'out' }>;
   updateAccountBalance: (accountName: string, newBalance: number) => void;
   addAccount: (name: string) => void;
   updateAccount: (oldName: string, newName: string) => void;
@@ -61,8 +63,10 @@ interface FinancesContextType {
   getPreviousMonthBalance: () => number;
   getPreviousMonthBalanceByAccount: (accountName: string) => number;
   getPendingByAccount: (accountName: string) => number;
+  getTransfersBalanceByAccount: (accountName: string) => number;
   syncToCloud: () => Promise<void>;
   lastSync: Date | null;
+  getAllData: () => Promise<{ transactions: Transaction[]; transfers: Transfer[]; accounts: AccountBalance[] }>;
 }
 
 const FinancesContext = createContext<FinancesContextType | undefined>(undefined);
@@ -581,6 +585,44 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     toast.success("Traspaso realizado");
   };
 
+  const deleteTransfer = (id: string) => {
+    markDirty();
+    const transfer = transfers.find(t => t.id === id);
+    if (transfer) {
+      // Reverse the balance changes
+      setAccounts(prevAccounts => 
+        prevAccounts.map(acc => {
+          if (acc.name === transfer.fromAccount) {
+            return { ...acc, balance: acc.balance + transfer.amount };
+          }
+          if (acc.name === transfer.toAccount) {
+            return { ...acc, balance: acc.balance - transfer.amount };
+          }
+          return acc;
+        })
+      );
+    }
+    setTransfers(transfers.filter(t => t.id !== id));
+    toast.success("Traspaso eliminado");
+  };
+
+  const getTransfersByAccount = (accountName: string): Array<Transfer & { type: 'in' | 'out' }> => {
+    return transfers
+      .filter(t => t.fromAccount === accountName || t.toAccount === accountName)
+      .map(t => ({
+        ...t,
+        type: t.toAccount === accountName ? 'in' as const : 'out' as const
+      }));
+  };
+
+  const getTransfersBalanceByAccount = (accountName: string): number => {
+    return transfers.reduce((total, t) => {
+      if (t.fromAccount === accountName) return total - t.amount;
+      if (t.toAccount === accountName) return total + t.amount;
+      return total;
+    }, 0);
+  };
+
   const loadPreviousMonth = () => {
     const [year, month] = currentMonth.split('-').map(Number);
     const prevDate = new Date(year, month - 2, 1);
@@ -777,6 +819,100 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       }, 0);
   };
 
+  const getAllData = async (): Promise<{ transactions: Transaction[]; transfers: Transfer[]; accounts: AccountBalance[] }> => {
+    if (storageMethod === 'local' || !user) {
+      // Get all months from localStorage
+      const allTransactions: Transaction[] = [];
+      const allTransfers: Transfer[] = [];
+      
+      // Iterate through localStorage to find all finance data
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith('finances-transactions-')) {
+          const data = localStorage.getItem(key);
+          if (data) {
+            const parsed = JSON.parse(data);
+            allTransactions.push(...parsed);
+          }
+        }
+        if (key?.startsWith('finances-transfers-')) {
+          const data = localStorage.getItem(key);
+          if (data) {
+            const parsed = JSON.parse(data);
+            allTransfers.push(...parsed);
+          }
+        }
+      }
+      
+      return { transactions: allTransactions, transfers: allTransfers, accounts };
+    } else {
+      // Get all data from cloud
+      try {
+        // Get accounts
+        const { data: accountsData } = await supabase
+          .from('accounts')
+          .select('*')
+          .eq('user_id', user.id);
+
+        const accountIdToName: Record<string, string> = {};
+        const cloudAccounts: AccountBalance[] = [];
+        if (accountsData) {
+          accountsData.forEach(acc => {
+            accountIdToName[acc.id] = acc.name;
+            cloudAccounts.push({ name: acc.name, balance: 0 });
+          });
+        }
+
+        // Get ALL transactions (no month filter)
+        const { data: transactionsData } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', user.id);
+
+        const extractCategoryAndName = (description: string): { category: Transaction['category'], name: string } => {
+          const match = description.match(/^\[(\w+)\]\s*(.*)$/);
+          if (match) {
+            return { category: match[1] as Transaction['category'], name: match[2] };
+          }
+          return { category: 'extra', name: description };
+        };
+
+        const allTransactions: Transaction[] = (transactionsData || []).map(t => {
+          const { category, name } = extractCategoryAndName(t.description);
+          return {
+            id: t.id,
+            name,
+            amount: Number(t.amount),
+            account: accountIdToName[t.account_id] || t.account_id,
+            executed: !t.pending,
+            category,
+            date: t.date,
+          };
+        });
+
+        // Get ALL transfers (no month filter)
+        const { data: transfersData } = await supabase
+          .from('transfers')
+          .select('*')
+          .eq('user_id', user.id);
+
+        const allTransfers: Transfer[] = (transfersData || []).map(t => ({
+          id: t.id,
+          fromAccount: accountIdToName[t.from_account_id] || t.from_account_id,
+          toAccount: accountIdToName[t.to_account_id] || t.to_account_id,
+          amount: Number(t.amount),
+          date: t.date,
+          note: t.description,
+        }));
+
+        return { transactions: allTransactions, transfers: allTransfers, accounts: cloudAccounts };
+      } catch (error) {
+        console.error('Error getting all data:', error);
+        return { transactions, transfers, accounts };
+      }
+    }
+  };
+
   return (
     <FinancesContext.Provider
       value={{
@@ -788,12 +924,14 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
         updateTransaction,
         deleteTransaction,
         addTransfer,
+        deleteTransfer,
         loadPreviousMonth,
         exportData,
         importData,
         setCurrentMonth,
         getTransactionsByCategory,
         getAccountTransactions,
+        getTransfersByAccount,
         updateAccountBalance,
         addAccount,
         updateAccount,
@@ -803,8 +941,10 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
         getPreviousMonthBalance,
         getPreviousMonthBalanceByAccount,
         getPendingByAccount,
+        getTransfersBalanceByAccount,
         syncToCloud,
         lastSync,
+        getAllData,
       }}
     >
       {children}

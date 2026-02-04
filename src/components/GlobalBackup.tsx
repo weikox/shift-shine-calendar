@@ -9,6 +9,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Settings, Download, Upload, Check, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +29,7 @@ interface GlobalBackupData {
     accounts: any[];
     transactions: any[];
     transfers: any[];
+    documentLinks?: any[];
   };
   notes: {
     pizarra: string;
@@ -36,19 +39,75 @@ interface GlobalBackupData {
     storageMethod: string;
     autoSync: boolean;
   };
+  documents?: any[];
 }
 
 export function GlobalBackup() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [exportAllMonths, setExportAllMonths] = useState(true);
+  const [includeDocumentLinks, setIncludeDocumentLinks] = useState(true);
+  const [includeDocuments, setIncludeDocuments] = useState(false);
   const { days, config, importData: importCalendarData } = useCalendar();
-  const { accounts, transactions, transfers, importData: importFinancesData } = useFinances();
+  const { accounts, transactions, transfers, importData: importFinancesData, getAllData } = useFinances();
   const { storageMethod } = useStorageMethod();
 
   const exportAllData = async () => {
     setIsExporting(true);
     try {
+      // Get finances data - either current month or all months
+      let financeData: { transactions: any[]; transfers: any[]; accounts: any[] };
+      
+      if (exportAllMonths) {
+        financeData = await getAllData();
+      } else {
+        financeData = { transactions, transfers, accounts };
+      }
+
+      // Get document links if requested
+      let documentLinks: any[] = [];
+      if (includeDocumentLinks) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: docs } = await supabase
+            .from("transaction_documents")
+            .select("*")
+            .eq("user_id", user.id);
+          documentLinks = docs || [];
+        }
+      }
+
+      // Get actual documents if requested
+      let documents: any[] = [];
+      if (includeDocuments && documentLinks.length > 0) {
+        for (const doc of documentLinks) {
+          try {
+            const { data } = await supabase.storage
+              .from("transaction-documents")
+              .download(doc.storage_path);
+            
+            if (data) {
+              const base64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(data);
+              });
+              
+              documents.push({
+                id: doc.id,
+                transaction_id: doc.transaction_id,
+                file_name: doc.file_name,
+                file_type: doc.file_type,
+                data: base64,
+              });
+            }
+          } catch (err) {
+            console.warn(`Could not download document ${doc.file_name}:`, err);
+          }
+        }
+      }
+
       // Get notes from localStorage or cloud
       let pizarraContent = "";
       let neveraContent = "";
@@ -87,16 +146,17 @@ export function GlobalBackup() {
       }
 
       const backupData: GlobalBackupData = {
-        version: "1.0",
+        version: "1.1",
         exportedAt: new Date().toISOString(),
         calendar: {
           days,
           config,
         },
         finances: {
-          accounts,
-          transactions,
-          transfers,
+          accounts: financeData.accounts,
+          transactions: financeData.transactions,
+          transfers: financeData.transfers,
+          documentLinks: includeDocumentLinks ? documentLinks : undefined,
         },
         notes: {
           pizarra: pizarraContent,
@@ -106,19 +166,28 @@ export function GlobalBackup() {
           storageMethod,
           autoSync,
         },
+        documents: includeDocuments ? documents : undefined,
       };
 
       const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `backup-completo-${new Date().toISOString().split("T")[0]}.json`;
+      const suffix = exportAllMonths ? "completo" : new Date().toISOString().split("T")[0];
+      a.download = `backup-${suffix}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success("Backup completo exportado correctamente");
+      const stats = [
+        `${financeData.transactions.length} transacciones`,
+        `${financeData.transfers.length} traspasos`,
+      ];
+      if (includeDocumentLinks) stats.push(`${documentLinks.length} refs. documentos`);
+      if (includeDocuments) stats.push(`${documents.length} documentos`);
+      
+      toast.success(`Backup exportado: ${stats.join(", ")}`);
     } catch (error) {
       console.error("Error exporting data:", error);
       toast.error("Error al exportar los datos");
@@ -318,7 +387,7 @@ export function GlobalBackup() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="text-sm text-muted-foreground space-y-1">
                   <div className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-500" />
@@ -334,21 +403,57 @@ export function GlobalBackup() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-500" />
-                    <span>Cuentas y transacciones</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Transferencias</span>
+                    <span>Cuentas, transacciones y traspasos</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-green-500" />
                     <span>Notas de Pizarra y Nevera</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <span>Configuraciones</span>
-                  </div>
                 </div>
+                
+                <div className="border-t pt-4 space-y-3">
+                  <p className="text-sm font-medium">Opciones de exportación</p>
+                  
+                  <div className="flex items-center gap-2">
+                    <Checkbox 
+                      id="export-all-months"
+                      checked={exportAllMonths} 
+                      onCheckedChange={(checked) => setExportAllMonths(checked as boolean)}
+                    />
+                    <Label htmlFor="export-all-months" className="cursor-pointer text-sm">
+                      Exportar todos los meses (histórico completo)
+                    </Label>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Checkbox 
+                      id="include-doc-links"
+                      checked={includeDocumentLinks} 
+                      onCheckedChange={(checked) => setIncludeDocumentLinks(checked as boolean)}
+                    />
+                    <Label htmlFor="include-doc-links" className="cursor-pointer text-sm">
+                      Incluir referencias a documentos
+                    </Label>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Checkbox 
+                      id="include-documents"
+                      checked={includeDocuments} 
+                      onCheckedChange={(checked) => setIncludeDocuments(checked as boolean)}
+                    />
+                    <Label htmlFor="include-documents" className="cursor-pointer text-sm">
+                      Incluir documentos (archivos adjuntos)
+                    </Label>
+                  </div>
+                  
+                  {includeDocuments && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 ml-6">
+                      ⚠️ Esto puede generar un archivo muy grande
+                    </p>
+                  )}
+                </div>
+                
                 <Button 
                   onClick={exportAllData} 
                   disabled={isExporting}
