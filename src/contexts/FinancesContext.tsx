@@ -798,17 +798,34 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     const prevDate = new Date(year, month - 2, 1);
     const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
     
+    let balance = 0;
+    
+    // Sum transactions from previous month
     const savedTransactions = localStorage.getItem(`finances-transactions-${prevMonth}`);
     if (savedTransactions) {
       const prevTransactions: Transaction[] = JSON.parse(savedTransactions);
-      return prevTransactions
+      balance = prevTransactions
         .filter(t => t.executed && t.account === accountName)
         .reduce((total, t) => {
           return total + (t.category === 'income' ? t.amount : -t.amount);
         }, 0);
     }
     
-    return 0;
+    // Add transfers from previous month
+    const savedTransfers = localStorage.getItem(`finances-transfers-${prevMonth}`);
+    if (savedTransfers) {
+      const prevTransfers: Transfer[] = JSON.parse(savedTransfers);
+      prevTransfers.forEach(transfer => {
+        if (transfer.toAccount === accountName) {
+          balance += transfer.amount; // Money coming in
+        }
+        if (transfer.fromAccount === accountName) {
+          balance -= transfer.amount; // Money going out
+        }
+      });
+    }
+    
+    return balance;
   };
 
   const getPendingByAccount = (accountName: string) => {
