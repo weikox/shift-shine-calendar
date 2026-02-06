@@ -115,7 +115,7 @@ export const FinancialSummaryCard = () => {
   }, [filteredTransactions, filteredTransfers]);
 
   const groupedByAccount = useMemo(() => {
-    const groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean }>; total: number }> = {};
+    const groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean; transactionId?: string }>; total: number }> = {};
     accounts.forEach((acc) => {
       if (selectedAccounts.size > 0 && !selectedAccounts.has(acc.name)) return;
       groups[acc.name] = { items: [], total: 0 };
@@ -124,7 +124,7 @@ export const FinancialSummaryCard = () => {
     filteredTransactions.forEach((t) => {
       if (!groups[t.account]) return;
       const signedAmount = t.category === "income" ? t.amount : -t.amount;
-      groups[t.account].items.push({ name: t.name, amount: signedAmount });
+      groups[t.account].items.push({ name: t.name, amount: signedAmount, transactionId: t.id });
       groups[t.account].total += signedAmount;
     });
 
