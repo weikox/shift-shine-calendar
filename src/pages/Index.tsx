@@ -177,6 +177,10 @@ const Index = () => {
             </Card>
           </Link>
         </div>
+
+        <div className="mt-6">
+          <FinancialSummaryCard />
+        </div>
       </div>
     </div>
   );
