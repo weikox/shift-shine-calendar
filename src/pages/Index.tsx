@@ -5,6 +5,7 @@ import { useCalendar } from "@/contexts/CalendarContext";
 import { useFinances } from "@/contexts/FinancesContext";
 import { useMemo } from "react";
 import { GlobalBackup } from "@/components/GlobalBackup";
+import { FinancialSummaryCard } from "@/components/FinancialSummaryCard";
 const Index = () => {
   const { days } = useCalendar();
   const { getTotalBalance, getPendingTransactionsTotal } = useFinances();
@@ -175,6 +176,10 @@ const Index = () => {
               </CardContent>
             </Card>
           </Link>
+        </div>
+
+        <div className="mt-6">
+          <FinancialSummaryCard />
         </div>
       </div>
     </div>
