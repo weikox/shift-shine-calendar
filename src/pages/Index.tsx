@@ -51,37 +51,37 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-4xl mx-auto relative">
-        <div className="absolute top-0 right-0 z-10">
+    <div className="h-[100dvh] bg-background p-3 md:p-6 flex flex-col">
+      <div className="max-w-4xl mx-auto w-full flex flex-col flex-1 min-h-0">
+        <div className="flex items-center justify-between mb-2 md:mb-6">
+          <div>
+            <h1 className="text-lg md:text-4xl font-bold text-foreground">Panel de Control</h1>
+            <p className="text-xs md:text-base text-muted-foreground hidden md:block">Gestiona tu calendario y finanzas</p>
+          </div>
           <GlobalBackup />
         </div>
-        <header className="mb-12 text-center">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Panel de Control</h1>
-          <p className="text-muted-foreground">Gestiona tu calendario y finanzas</p>
-        </header>
         
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Link to="/calendar" className="group">
-            <Card className="transition-all hover:shadow-lg hover:scale-105">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <Calendar className="h-12 w-12 text-primary" />
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-6 flex-1 min-h-0 auto-rows-fr">
+          <Link to="/calendar" className="group min-h-0">
+            <Card className="transition-all hover:shadow-lg hover:scale-105 h-full flex flex-col">
+              <CardHeader className="p-3 md:p-6 pb-1 md:pb-2 flex-1 min-h-0">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-6 w-6 md:h-12 md:w-12 text-primary shrink-0" />
+                  <CardTitle className="text-sm md:text-2xl">Calendario</CardTitle>
                 </div>
-                <CardTitle className="text-2xl">Calendario</CardTitle>
-                <CardDescription>
+                <CardDescription className="text-[10px] md:text-sm hidden md:block">
                   Gestiona tus turnos, eventos y recordatorios
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="text-sm">
+              <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
+                <div className="space-y-0.5">
+                  <div className="text-[10px] md:text-sm">
                     <span className="text-muted-foreground">Hoy: </span>
                     <span className="font-medium">{getShiftLabel(calendarSummary.todayShift)}</span>
                   </div>
                   {calendarSummary.nextShiftDay && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Próximo turno: </span>
+                    <div className="text-[10px] md:text-sm">
+                      <span className="text-muted-foreground">Próx: </span>
                       <span className="font-medium">
                         {getShiftLabel(calendarSummary.nextShiftDay.shift)} ({calendarSummary.nextShiftDay.date})
                       </span>
@@ -92,25 +92,25 @@ const Index = () => {
             </Card>
           </Link>
 
-          <Link to="/cuentas" className="group">
-            <Card className="transition-all hover:shadow-lg hover:scale-105">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <Wallet className="h-12 w-12 text-primary" />
+          <Link to="/cuentas" className="group min-h-0">
+            <Card className="transition-all hover:shadow-lg hover:scale-105 h-full flex flex-col">
+              <CardHeader className="p-3 md:p-6 pb-1 md:pb-2 flex-1 min-h-0">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-6 w-6 md:h-12 md:w-12 text-primary shrink-0" />
+                  <CardTitle className="text-sm md:text-2xl">Cuentas</CardTitle>
                 </div>
-                <CardTitle className="text-2xl">Cuentas</CardTitle>
-                <CardDescription>
+                <CardDescription className="text-[10px] md:text-sm hidden md:block">
                   Controla tus gastos e ingresos mensuales
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Balance actual: </span>
+              <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
+                <div className="space-y-0.5">
+                  <div className="text-[10px] md:text-sm">
+                    <span className="text-muted-foreground">Balance: </span>
                     <span className="font-medium">{financesSummary.currentBalance.toFixed(2)}€</span>
                   </div>
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Balance proyectado: </span>
+                  <div className="text-[10px] md:text-sm">
+                    <span className="text-muted-foreground">Proyect: </span>
                     <span className={`font-medium ${financesSummary.projectedBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {financesSummary.projectedBalance.toFixed(2)}€
                     </span>
@@ -120,82 +120,82 @@ const Index = () => {
             </Card>
           </Link>
 
-          <Link to="/pizarra" className="group">
-            <Card className="transition-all hover:shadow-lg hover:scale-105">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <StickyNote className="h-12 w-12 text-primary" />
+          <Link to="/pizarra" className="group min-h-0">
+            <Card className="transition-all hover:shadow-lg hover:scale-105 h-full flex flex-col">
+              <CardHeader className="p-3 md:p-6 pb-1 md:pb-2 flex-1 min-h-0">
+                <div className="flex items-center gap-2">
+                  <StickyNote className="h-6 w-6 md:h-12 md:w-12 text-primary shrink-0" />
+                  <CardTitle className="text-sm md:text-2xl">Pizarra</CardTitle>
                 </div>
-                <CardTitle className="text-2xl">Pizarra</CardTitle>
-                <CardDescription>
+                <CardDescription className="text-[10px] md:text-sm hidden md:block">
                   Espacio para notas y recordatorios
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Escribe y guarda tus notas importantes
+              <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
+                <p className="text-[10px] md:text-sm text-muted-foreground">
+                  Notas importantes
                 </p>
               </CardContent>
             </Card>
           </Link>
 
-          <Link to="/nevera" className="group">
-            <Card className="transition-all hover:shadow-lg hover:scale-105">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <Refrigerator className="h-12 w-12 text-primary" />
+          <Link to="/nevera" className="group min-h-0">
+            <Card className="transition-all hover:shadow-lg hover:scale-105 h-full flex flex-col">
+              <CardHeader className="p-3 md:p-6 pb-1 md:pb-2 flex-1 min-h-0">
+                <div className="flex items-center gap-2">
+                  <Refrigerator className="h-6 w-6 md:h-12 md:w-12 text-primary shrink-0" />
+                  <CardTitle className="text-sm md:text-2xl">Nevera</CardTitle>
                 </div>
-                <CardTitle className="text-2xl">Nevera</CardTitle>
-                <CardDescription>
+                <CardDescription className="text-[10px] md:text-sm hidden md:block">
                   Lista de compras y contenido de la nevera
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Organiza tu lista de la compra
+              <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
+                <p className="text-[10px] md:text-sm text-muted-foreground">
+                  Lista de la compra
                 </p>
               </CardContent>
             </Card>
           </Link>
 
-          <Link to="/domotica" className="group">
-            <Card className="transition-all hover:shadow-lg hover:scale-105">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <Home className="h-12 w-12 text-primary" />
+          <Link to="/domotica" className="group min-h-0">
+            <Card className="transition-all hover:shadow-lg hover:scale-105 h-full flex flex-col">
+              <CardHeader className="p-3 md:p-6 pb-1 md:pb-2 flex-1 min-h-0">
+                <div className="flex items-center gap-2">
+                  <Home className="h-6 w-6 md:h-12 md:w-12 text-primary shrink-0" />
+                  <CardTitle className="text-sm md:text-2xl">Domótica</CardTitle>
                 </div>
-                <CardTitle className="text-2xl">Domótica</CardTitle>
-                <CardDescription>
+                <CardDescription className="text-[10px] md:text-sm hidden md:block">
                   Control de dispositivos inteligentes
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Gestiona tus dispositivos eWeLink
+              <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
+                <p className="text-[10px] md:text-sm text-muted-foreground">
+                  Dispositivos eWeLink
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link to="/resumen-financiero" className="group min-h-0">
+            <Card className="transition-all hover:shadow-lg hover:scale-105 h-full flex flex-col">
+              <CardHeader className="p-3 md:p-6 pb-1 md:pb-2 flex-1 min-h-0">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-6 w-6 md:h-12 md:w-12 text-primary shrink-0" />
+                  <CardTitle className="text-sm md:text-2xl">Resumen</CardTitle>
+                </div>
+                <CardDescription className="text-[10px] md:text-sm hidden md:block">
+                  Vista detallada de ingresos y gastos
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
+                <p className="text-[10px] md:text-sm text-muted-foreground">
+                  Movimientos mensuales
                 </p>
               </CardContent>
             </Card>
           </Link>
         </div>
-
-          <Link to="/resumen-financiero" className="group">
-            <Card className="transition-all hover:shadow-lg hover:scale-105">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <BarChart3 className="h-12 w-12 text-primary" />
-                </div>
-                <CardTitle className="text-2xl">Resumen Financiero</CardTitle>
-                <CardDescription>
-                  Vista detallada de ingresos y gastos por tipo o cuenta
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Filtra y agrupa tus movimientos mensuales
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
       </div>
     </div>
   );
