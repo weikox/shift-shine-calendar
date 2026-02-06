@@ -5,7 +5,7 @@ import { useCalendar } from "@/contexts/CalendarContext";
 import { useFinances } from "@/contexts/FinancesContext";
 import { useMemo } from "react";
 import { GlobalBackup } from "@/components/GlobalBackup";
-import { FinancialSummaryCard } from "@/components/FinancialSummaryCard";
+import { BarChart3 } from "lucide-react";
 const Index = () => {
   const { days } = useCalendar();
   const { getTotalBalance, getPendingTransactionsTotal } = useFinances();
