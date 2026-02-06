@@ -2,9 +2,11 @@ import { useState, useMemo } from "react";
 import { useFinances, Transaction, Transfer } from "@/contexts/FinancesContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Wallet, ChevronRight, ChevronDown, LayoutList, Building2 } from "lucide-react";
+import { Wallet, ChevronRight, ChevronDown, LayoutList, Building2, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useTransactionDocumentCounts } from "@/hooks/useTransactionDocumentCounts";
+import { TransactionDocumentsDialog } from "@/components/TransactionDocumentsDialog";
 
 type ViewMode = "type" | "account";
 
