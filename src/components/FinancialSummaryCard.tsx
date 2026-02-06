@@ -237,12 +237,18 @@ export const FinancialSummaryCard = () => {
               expandedGroups={expandedGroups}
               toggleGroup={toggleGroup}
               filteredTransfers={filteredTransfers}
+              onTransactionClick={handleTransactionClick}
+              hasDocuments={(id) => hasDocuments(id)}
+              transactions={transactions}
             />
           ) : (
             <AccountView
               groups={groupedByAccount}
               expandedGroups={expandedGroups}
               toggleGroup={toggleGroup}
+              onTransactionClick={handleTransactionClick}
+              hasDocuments={(id) => hasDocuments(id)}
+              transactions={transactions}
             />
           )}
 
