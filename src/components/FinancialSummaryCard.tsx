@@ -398,10 +398,16 @@ function AccountView({
   groups,
   expandedGroups,
   toggleGroup,
+  onTransactionClick,
+  hasDocuments,
+  transactions,
 }: {
-  groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean }>; total: number }>;
+  groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean; transactionId?: string }>; total: number }>;
   expandedGroups: Set<string>;
   toggleGroup: (key: string) => void;
+  onTransactionClick: (t: Transaction) => void;
+  hasDocuments: (id: string) => boolean;
+  transactions: Transaction[];
 }) {
   const accountNames = Object.keys(groups);
 
@@ -437,20 +443,31 @@ function AccountView({
             </button>
             {isExpanded && (
               <div className="bg-muted/20">
-                {group.items.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between px-4 py-0.5 border-b border-border/50"
-                  >
-                    <span className={cn("truncate", item.isTransfer && "italic text-muted-foreground")}>
-                      {item.name}
-                    </span>
-                    <span className={cn("flex-shrink-0 ml-2", item.amount >= 0 ? "text-green-600" : "text-red-600")}>
-                      {item.amount >= 0 ? "+" : ""}
-                      {item.amount.toFixed(2)}€
-                    </span>
-                  </div>
-                ))}
+                {group.items.map((item, i) => {
+                  const tx = item.transactionId ? transactions.find(t => t.id === item.transactionId) : undefined;
+                  const hasDocs = tx ? ((tx.documents && tx.documents.length > 0) || hasDocuments(tx.id)) : false;
+                  return (
+                    <div
+                      key={i}
+                      onClick={() => hasDocs && tx && onTransactionClick(tx)}
+                      className={cn(
+                        "flex items-center justify-between px-4 py-0.5 border-b border-border/50",
+                        hasDocs && "cursor-pointer hover:bg-muted/40"
+                      )}
+                    >
+                      <div className="flex items-center gap-1 min-w-0 flex-1">
+                        <span className={cn("truncate", item.isTransfer && "italic text-muted-foreground")}>
+                          {item.name}
+                        </span>
+                        {hasDocs && <Paperclip className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
+                      </div>
+                      <span className={cn("flex-shrink-0 ml-2", item.amount >= 0 ? "text-green-600" : "text-red-600")}>
+                        {item.amount >= 0 ? "+" : ""}
+                        {item.amount.toFixed(2)}€
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
