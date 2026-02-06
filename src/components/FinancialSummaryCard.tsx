@@ -33,6 +33,11 @@ export const FinancialSummaryCard = () => {
   const [selectedTypes, setSelectedTypes] = useState<Set<Transaction["category"]>>(new Set());
   const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set());
   const [selectedExecuted, setSelectedExecuted] = useState<Set<string>>(new Set());
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [docsDialogOpen, setDocsDialogOpen] = useState(false);
+
+  const transactionIds = useMemo(() => transactions.map(t => t.id), [transactions]);
+  const { hasDocuments } = useTransactionDocumentCounts(transactionIds);
 
   const toggleGroup = (key: string) => {
     setExpandedGroups((prev) => {
