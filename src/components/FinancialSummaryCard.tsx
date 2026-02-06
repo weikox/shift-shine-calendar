@@ -55,6 +55,14 @@ export const FinancialSummaryCard = () => {
     setter(next);
   };
 
+  const handleTransactionClick = (t: Transaction) => {
+    const hasDocs = (t.documents && t.documents.length > 0) || hasDocuments(t.id);
+    if (hasDocs) {
+      setSelectedTransaction(t);
+      setDocsDialogOpen(true);
+    }
+  };
+
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
       if (selectedTypes.size > 0 && !selectedTypes.has(t.category)) return false;
