@@ -17,6 +17,7 @@ import Auth from "./pages/Auth";
 import Pizarra from "./pages/Pizarra";
 import Nevera from "./pages/Nevera";
 import Domotica from "./pages/Domotica";
+import FinancialSummary from "./pages/FinancialSummary";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -41,6 +42,7 @@ const App = () => (
                   <Route path="/pizarra" element={<Pizarra />} />
                   <Route path="/nevera" element={<Nevera />} />
                   <Route path="/domotica" element={<Domotica />} />
+                  <Route path="/resumen-financiero" element={<FinancialSummary />} />
                   <Route path="/auth" element={<Auth />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />

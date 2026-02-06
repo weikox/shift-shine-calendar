@@ -5,7 +5,7 @@ import { useCalendar } from "@/contexts/CalendarContext";
 import { useFinances } from "@/contexts/FinancesContext";
 import { useMemo } from "react";
 import { GlobalBackup } from "@/components/GlobalBackup";
-import { FinancialSummaryCard } from "@/components/FinancialSummaryCard";
+import { BarChart3 } from "lucide-react";
 const Index = () => {
   const { days } = useCalendar();
   const { getTotalBalance, getPendingTransactionsTotal } = useFinances();
@@ -178,9 +178,24 @@ const Index = () => {
           </Link>
         </div>
 
-        <div className="mt-6">
-          <FinancialSummaryCard />
-        </div>
+          <Link to="/resumen-financiero" className="group">
+            <Card className="transition-all hover:shadow-lg hover:scale-105">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <BarChart3 className="h-12 w-12 text-primary" />
+                </div>
+                <CardTitle className="text-2xl">Resumen Financiero</CardTitle>
+                <CardDescription>
+                  Vista detallada de ingresos y gastos por tipo o cuenta
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Filtra y agrupa tus movimientos mensuales
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
       </div>
     </div>
   );
