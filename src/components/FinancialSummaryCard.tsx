@@ -2,9 +2,11 @@ import { useState, useMemo } from "react";
 import { useFinances, Transaction, Transfer } from "@/contexts/FinancesContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Wallet, ChevronRight, ChevronDown, LayoutList, Building2 } from "lucide-react";
+import { Wallet, ChevronRight, ChevronDown, LayoutList, Building2, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useTransactionDocumentCounts } from "@/hooks/useTransactionDocumentCounts";
+import { TransactionDocumentsDialog } from "@/components/TransactionDocumentsDialog";
 
 type ViewMode = "type" | "account";
 
@@ -31,6 +33,11 @@ export const FinancialSummaryCard = () => {
   const [selectedTypes, setSelectedTypes] = useState<Set<Transaction["category"]>>(new Set());
   const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set());
   const [selectedExecuted, setSelectedExecuted] = useState<Set<string>>(new Set());
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [docsDialogOpen, setDocsDialogOpen] = useState(false);
+
+  const transactionIds = useMemo(() => transactions.map(t => t.id), [transactions]);
+  const { hasDocuments } = useTransactionDocumentCounts(transactionIds);
 
   const toggleGroup = (key: string) => {
     setExpandedGroups((prev) => {
@@ -46,6 +53,14 @@ export const FinancialSummaryCard = () => {
     if (next.has(value)) next.delete(value);
     else next.add(value);
     setter(next);
+  };
+
+  const handleTransactionClick = (t: Transaction) => {
+    const hasDocs = (t.documents && t.documents.length > 0) || hasDocuments(t.id);
+    if (hasDocs) {
+      setSelectedTransaction(t);
+      setDocsDialogOpen(true);
+    }
   };
 
   const filteredTransactions = useMemo(() => {
@@ -100,7 +115,7 @@ export const FinancialSummaryCard = () => {
   }, [filteredTransactions, filteredTransfers]);
 
   const groupedByAccount = useMemo(() => {
-    const groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean }>; total: number }> = {};
+    const groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean; transactionId?: string }>; total: number }> = {};
     accounts.forEach((acc) => {
       if (selectedAccounts.size > 0 && !selectedAccounts.has(acc.name)) return;
       groups[acc.name] = { items: [], total: 0 };
@@ -109,7 +124,7 @@ export const FinancialSummaryCard = () => {
     filteredTransactions.forEach((t) => {
       if (!groups[t.account]) return;
       const signedAmount = t.category === "income" ? t.amount : -t.amount;
-      groups[t.account].items.push({ name: t.name, amount: signedAmount });
+      groups[t.account].items.push({ name: t.name, amount: signedAmount, transactionId: t.id });
       groups[t.account].total += signedAmount;
     });
 
@@ -222,12 +237,18 @@ export const FinancialSummaryCard = () => {
               expandedGroups={expandedGroups}
               toggleGroup={toggleGroup}
               filteredTransfers={filteredTransfers}
+              onTransactionClick={handleTransactionClick}
+              hasDocuments={(id) => hasDocuments(id)}
+              transactions={transactions}
             />
           ) : (
             <AccountView
               groups={groupedByAccount}
               expandedGroups={expandedGroups}
               toggleGroup={toggleGroup}
+              onTransactionClick={handleTransactionClick}
+              hasDocuments={(id) => hasDocuments(id)}
+              transactions={transactions}
             />
           )}
 
@@ -241,6 +262,12 @@ export const FinancialSummaryCard = () => {
           </div>
         </div>
       </CardContent>
+
+      <TransactionDocumentsDialog
+        transaction={selectedTransaction}
+        open={docsDialogOpen}
+        onOpenChange={setDocsDialogOpen}
+      />
     </Card>
   );
 };
@@ -251,11 +278,17 @@ function TypeView({
   expandedGroups,
   toggleGroup,
   filteredTransfers,
+  onTransactionClick,
+  hasDocuments,
+  transactions,
 }: {
   groups: Record<string, { transactions: Transaction[]; total: number }>;
   expandedGroups: Set<string>;
   toggleGroup: (key: string) => void;
   filteredTransfers: Transfer[];
+  onTransactionClick: (t: Transaction) => void;
+  hasDocuments: (id: string) => boolean;
+  transactions: Transaction[];
 }) {
   return (
     <div>
@@ -289,21 +322,29 @@ function TypeView({
               <div className="bg-muted/20">
                 {group.transactions
                   .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
-                  .map((t) => (
-                    <div
-                      key={t.id}
-                      className="flex items-center justify-between px-4 py-0.5 border-b border-border/50"
-                    >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", t.executed ? "bg-green-500" : "bg-yellow-500")} />
-                        <span className="truncate">{t.name}</span>
-                        <span className="text-muted-foreground flex-shrink-0">{t.account}</span>
+                  .map((t) => {
+                    const hasDocs = (t.documents && t.documents.length > 0) || hasDocuments(t.id);
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => hasDocs && onTransactionClick(t)}
+                        className={cn(
+                          "flex items-center justify-between px-4 py-0.5 border-b border-border/50",
+                          hasDocs && "cursor-pointer hover:bg-muted/40"
+                        )}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", t.executed ? "bg-green-500" : "bg-yellow-500")} />
+                          <span className="truncate">{t.name}</span>
+                          {hasDocs && <Paperclip className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
+                          <span className="text-muted-foreground flex-shrink-0">{t.account}</span>
+                        </div>
+                        <span className={cn("flex-shrink-0 ml-2", isIncome ? "text-green-600" : "text-red-600")}>
+                          {isIncome ? "+" : "-"}{t.amount.toFixed(2)}€
+                        </span>
                       </div>
-                      <span className={cn("flex-shrink-0 ml-2", isIncome ? "text-green-600" : "text-red-600")}>
-                        {isIncome ? "+" : "-"}{t.amount.toFixed(2)}€
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
           </div>
@@ -357,10 +398,16 @@ function AccountView({
   groups,
   expandedGroups,
   toggleGroup,
+  onTransactionClick,
+  hasDocuments,
+  transactions,
 }: {
-  groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean }>; total: number }>;
+  groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean; transactionId?: string }>; total: number }>;
   expandedGroups: Set<string>;
   toggleGroup: (key: string) => void;
+  onTransactionClick: (t: Transaction) => void;
+  hasDocuments: (id: string) => boolean;
+  transactions: Transaction[];
 }) {
   const accountNames = Object.keys(groups);
 
@@ -396,20 +443,31 @@ function AccountView({
             </button>
             {isExpanded && (
               <div className="bg-muted/20">
-                {group.items.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between px-4 py-0.5 border-b border-border/50"
-                  >
-                    <span className={cn("truncate", item.isTransfer && "italic text-muted-foreground")}>
-                      {item.name}
-                    </span>
-                    <span className={cn("flex-shrink-0 ml-2", item.amount >= 0 ? "text-green-600" : "text-red-600")}>
-                      {item.amount >= 0 ? "+" : ""}
-                      {item.amount.toFixed(2)}€
-                    </span>
-                  </div>
-                ))}
+                {group.items.map((item, i) => {
+                  const tx = item.transactionId ? transactions.find(t => t.id === item.transactionId) : undefined;
+                  const hasDocs = tx ? ((tx.documents && tx.documents.length > 0) || hasDocuments(tx.id)) : false;
+                  return (
+                    <div
+                      key={i}
+                      onClick={() => hasDocs && tx && onTransactionClick(tx)}
+                      className={cn(
+                        "flex items-center justify-between px-4 py-0.5 border-b border-border/50",
+                        hasDocs && "cursor-pointer hover:bg-muted/40"
+                      )}
+                    >
+                      <div className="flex items-center gap-1 min-w-0 flex-1">
+                        <span className={cn("truncate", item.isTransfer && "italic text-muted-foreground")}>
+                          {item.name}
+                        </span>
+                        {hasDocs && <Paperclip className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
+                      </div>
+                      <span className={cn("flex-shrink-0 ml-2", item.amount >= 0 ? "text-green-600" : "text-red-600")}>
+                        {item.amount >= 0 ? "+" : ""}
+                        {item.amount.toFixed(2)}€
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
