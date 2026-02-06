@@ -42,6 +42,7 @@ const App = () => (
                   <Route path="/pizarra" element={<Pizarra />} />
                   <Route path="/nevera" element={<Nevera />} />
                   <Route path="/domotica" element={<Domotica />} />
+                  <Route path="/resumen-financiero" element={<FinancialSummary />} />
                   <Route path="/auth" element={<Auth />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
