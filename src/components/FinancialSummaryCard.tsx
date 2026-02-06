@@ -262,6 +262,12 @@ export const FinancialSummaryCard = () => {
           </div>
         </div>
       </CardContent>
+
+      <TransactionDocumentsDialog
+        transaction={selectedTransaction}
+        open={docsDialogOpen}
+        onOpenChange={setDocsDialogOpen}
+      />
     </Card>
   );
 };
