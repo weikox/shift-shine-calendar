@@ -17,6 +17,7 @@ import Auth from "./pages/Auth";
 import Pizarra from "./pages/Pizarra";
 import Nevera from "./pages/Nevera";
 import Domotica from "./pages/Domotica";
+import FinancialSummary from "./pages/FinancialSummary";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
