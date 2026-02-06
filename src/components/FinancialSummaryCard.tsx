@@ -278,11 +278,17 @@ function TypeView({
   expandedGroups,
   toggleGroup,
   filteredTransfers,
+  onTransactionClick,
+  hasDocuments,
+  transactions,
 }: {
   groups: Record<string, { transactions: Transaction[]; total: number }>;
   expandedGroups: Set<string>;
   toggleGroup: (key: string) => void;
   filteredTransfers: Transfer[];
+  onTransactionClick: (t: Transaction) => void;
+  hasDocuments: (id: string) => boolean;
+  transactions: Transaction[];
 }) {
   return (
     <div>
@@ -316,21 +322,29 @@ function TypeView({
               <div className="bg-muted/20">
                 {group.transactions
                   .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
-                  .map((t) => (
-                    <div
-                      key={t.id}
-                      className="flex items-center justify-between px-4 py-0.5 border-b border-border/50"
-                    >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", t.executed ? "bg-green-500" : "bg-yellow-500")} />
-                        <span className="truncate">{t.name}</span>
-                        <span className="text-muted-foreground flex-shrink-0">{t.account}</span>
+                  .map((t) => {
+                    const hasDocs = (t.documents && t.documents.length > 0) || hasDocuments(t.id);
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => hasDocs && onTransactionClick(t)}
+                        className={cn(
+                          "flex items-center justify-between px-4 py-0.5 border-b border-border/50",
+                          hasDocs && "cursor-pointer hover:bg-muted/40"
+                        )}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", t.executed ? "bg-green-500" : "bg-yellow-500")} />
+                          <span className="truncate">{t.name}</span>
+                          {hasDocs && <Paperclip className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
+                          <span className="text-muted-foreground flex-shrink-0">{t.account}</span>
+                        </div>
+                        <span className={cn("flex-shrink-0 ml-2", isIncome ? "text-green-600" : "text-red-600")}>
+                          {isIncome ? "+" : "-"}{t.amount.toFixed(2)}€
+                        </span>
                       </div>
-                      <span className={cn("flex-shrink-0 ml-2", isIncome ? "text-green-600" : "text-red-600")}>
-                        {isIncome ? "+" : "-"}{t.amount.toFixed(2)}€
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
           </div>
