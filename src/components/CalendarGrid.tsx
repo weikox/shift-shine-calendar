@@ -247,6 +247,12 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
           open={selectedDate !== null}
           onOpenChange={(open) => !open && setSelectedDate(null)}
         />
+      ) : mode === "events" ? (
+        <EventDialog
+          selectedDate={selectedDate}
+          open={selectedDate !== null}
+          onOpenChange={(open) => !open && setSelectedDate(null)}
+        />
       ) : (
         <EventDialog
           selectedDate={selectedDate}
