@@ -11,7 +11,21 @@ interface CalendarGridProps {
 
 export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
   const { mode, days, isHoliday, getEventsForDate, config } = useCalendar();
+  const { transactions } = useFinances();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+  // Build a map of date -> daily transactions for history mode
+  const dailyTransactionsByDate = useMemo(() => {
+    const map: Record<string, Array<{ name: string; category: string }>> = {};
+    transactions.forEach((t) => {
+      if (t.category === "daily" || t.category === "income") {
+        const dateStr = t.date.length === 7 ? `${t.date}-01` : t.date;
+        if (!map[dateStr]) map[dateStr] = [];
+        map[dateStr].push({ name: t.name, category: t.category });
+      }
+    });
+    return map;
+  }, [transactions]);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
