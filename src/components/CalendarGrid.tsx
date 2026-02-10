@@ -218,7 +218,7 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
                               {event.title}
                             </div>
                           ))}
-                          {(date ? dailyTransactionsByDate[date.toISOString().split("T")[0]] || [] : []).map((t, idx) => (
+                          {(date ? dailyTransactionsByDate[formatLocalDate(date)] || [] : []).map((t, idx) => (
                             <div
                               key={`tx-${idx}`}
                               className={cn(
