@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useCalendar } from "@/contexts/CalendarContext";
+import { useFinances } from "@/contexts/FinancesContext";
 import { ShiftDialog } from "./ShiftDialog";
 import { EventDialog } from "./EventDialog";
 import { cn } from "@/lib/utils";
@@ -10,7 +11,21 @@ interface CalendarGridProps {
 
 export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
   const { mode, days, isHoliday, getEventsForDate, config } = useCalendar();
+  const { transactions } = useFinances();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+  // Build a map of date -> daily transactions for history mode
+  const dailyTransactionsByDate = useMemo(() => {
+    const map: Record<string, Array<{ name: string; category: string }>> = {};
+    transactions.forEach((t) => {
+      if (t.category === "daily" || t.category === "income") {
+        const dateStr = t.date.length === 7 ? `${t.date}-01` : t.date;
+        if (!map[dateStr]) map[dateStr] = [];
+        map[dateStr].push({ name: t.name, category: t.category });
+      }
+    });
+    return map;
+  }, [transactions]);
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -185,6 +200,33 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
                         </div>
                       )}
                       
+                      {/* Show history: events + daily expenses + income */}
+                      {mode === "history" && (
+                        <div className="mt-1 space-y-0.5 flex-1 overflow-hidden">
+                          {events.map((event) => (
+                            <div
+                              key={event.id}
+                              className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary truncate"
+                            >
+                              {event.title}
+                            </div>
+                          ))}
+                          {(date ? dailyTransactionsByDate[date.toISOString().split("T")[0]] || [] : []).map((t, idx) => (
+                            <div
+                              key={`tx-${idx}`}
+                              className={cn(
+                                "text-xs px-1.5 py-0.5 rounded truncate",
+                                t.category === "income"
+                                  ? "bg-green-500/10 text-green-700 dark:text-green-400"
+                                  : "bg-orange-500/10 text-orange-700 dark:text-orange-400"
+                              )}
+                            >
+                              {t.name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
                       {holiday && (
                         <div className="mt-1 text-xs text-holiday truncate">
                           {holiday.name}
@@ -201,6 +243,12 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
 
       {mode === "shifts" ? (
         <ShiftDialog
+          selectedDate={selectedDate}
+          open={selectedDate !== null}
+          onOpenChange={(open) => !open && setSelectedDate(null)}
+        />
+      ) : mode === "events" ? (
+        <EventDialog
           selectedDate={selectedDate}
           open={selectedDate !== null}
           onOpenChange={(open) => !open && setSelectedDate(null)}
