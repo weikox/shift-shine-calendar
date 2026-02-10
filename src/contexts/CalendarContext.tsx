@@ -635,10 +635,17 @@ export const CalendarProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return allEvents;
   };
 
+  const formatLocalDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  };
+
   const eventMatchesDate = (event: CalendarEvent, targetDate: Date): boolean => {
-    const eventDate = new Date(event.date);
-    const targetDateStr = targetDate.toISOString().split("T")[0];
-    const eventDateStr = eventDate.toISOString().split("T")[0];
+    const eventDate = new Date(event.date + "T00:00:00");
+    const targetDateStr = formatLocalDate(targetDate);
+    const eventDateStr = formatLocalDate(eventDate);
 
     if (eventDateStr === targetDateStr) return true;
 

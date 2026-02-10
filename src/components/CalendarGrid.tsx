@@ -53,9 +53,16 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
     return daysArray;
   };
 
+  const formatLocalDate = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
   const getDayData = (date: Date | null) => {
     if (!date) return null;
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = formatLocalDate(date);
     return days[dateStr];
   };
 
