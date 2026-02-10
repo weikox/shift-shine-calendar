@@ -5,7 +5,7 @@ import { useStorageMethod } from "@/hooks/useStorageMethod";
 import { useAuth } from "@/hooks/useAuth";
 
 export type ShiftType = "M" | "T" | null;
-export type CalendarMode = "shifts" | "events";
+export type CalendarMode = "shifts" | "events" | "history";
 
 export type RecurrenceType = "none" | "daily" | "weekly" | "monthly" | "yearly";
 

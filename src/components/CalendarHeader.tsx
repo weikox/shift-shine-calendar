@@ -74,6 +74,13 @@ export const CalendarHeader = ({ currentDate, onPrevMonth, onNextMonth }: Calend
             >
               Eventos
             </Badge>
+            <Badge
+              variant={mode === "history" ? "default" : "outline"}
+              className="cursor-pointer px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm"
+              onClick={() => setMode("history")}
+            >
+              Historia
+            </Badge>
           </div>
         </div>
       </div>

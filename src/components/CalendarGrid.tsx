@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useCalendar } from "@/contexts/CalendarContext";
+import { useFinances } from "@/contexts/FinancesContext";
 import { ShiftDialog } from "./ShiftDialog";
 import { EventDialog } from "./EventDialog";
 import { cn } from "@/lib/utils";
