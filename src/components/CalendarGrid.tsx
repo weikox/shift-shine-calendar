@@ -18,7 +18,7 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
   const dailyTransactionsByDate = useMemo(() => {
     const map: Record<string, Array<{ name: string; category: string }>> = {};
     transactions.forEach((t) => {
-      if (t.category === "daily" || t.category === "income") {
+      if (t.category === "daily" || t.category === "income" || t.category === "extra") {
         const dateStr = t.date.length === 7 ? `${t.date}-01` : t.date;
         if (!map[dateStr]) map[dateStr] = [];
         map[dateStr].push({ name: t.name, category: t.category });
@@ -218,7 +218,9 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
                                 "text-xs px-1.5 py-0.5 rounded truncate",
                                 t.category === "income"
                                   ? "bg-green-500/10 text-green-700 dark:text-green-400"
-                                  : "bg-orange-500/10 text-orange-700 dark:text-orange-400"
+                                  : t.category === "extra"
+                                    ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                                    : "bg-orange-500/10 text-orange-700 dark:text-orange-400"
                               )}
                             >
                               {t.name}
