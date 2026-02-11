@@ -132,15 +132,22 @@ export const FinancialSummaryCard = () => {
         groups[cat] = { transactions: items, total };
       }
     });
-    // Add transfers group if any
+    // Add transfers group with net effect for filtered accounts
     if (filteredTransfers.length > 0) {
+      let transferTotal = 0;
+      if (selectedAccounts.size > 0) {
+        filteredTransfers.forEach((t) => {
+          if (selectedAccounts.has(t.toAccount)) transferTotal += t.amount;
+          if (selectedAccounts.has(t.fromAccount)) transferTotal -= t.amount;
+        });
+      }
       groups["transfers"] = {
         transactions: [],
-        total: 0, // zero-sum
+        total: transferTotal,
       };
     }
     return groups;
-  }, [filteredTransactions, filteredTransfers]);
+  }, [filteredTransactions, filteredTransfers, selectedAccounts]);
 
   const groupedByAccount = useMemo(() => {
     const groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean; transactionId?: string }>; total: number }> = {};
@@ -418,7 +425,9 @@ function TypeView({
               <span className="font-medium">Traspasos</span>
               <span className="text-muted-foreground">({filteredTransfers.length})</span>
             </div>
-            <span className="text-muted-foreground font-medium">0.00€</span>
+            <span className={cn("font-medium", groups["transfers"]?.total === 0 ? "text-muted-foreground" : groups["transfers"]?.total > 0 ? "text-green-600" : "text-red-600")}>
+              {(groups["transfers"]?.total ?? 0) >= 0 ? "+" : ""}{(groups["transfers"]?.total ?? 0).toFixed(2)}€
+            </span>
           </button>
           {expandedGroups.has("transfers") && (
             <div className="bg-muted/20">
