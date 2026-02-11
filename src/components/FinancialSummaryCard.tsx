@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Wallet, ChevronRight, ChevronDown, LayoutList, Building2, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { useTransactionDocumentCounts } from "@/hooks/useTransactionDocumentCounts";
 import { TransactionDocumentsDialog } from "@/components/TransactionDocumentsDialog";
@@ -26,7 +27,7 @@ const EXECUTED_OPTIONS = [
 ];
 
 export const FinancialSummaryCard = () => {
-  const { transactions, transfers, accounts, currentMonth } = useFinances();
+  const { transactions, transfers, accounts, currentMonth, getPreviousMonthBalanceByAccount } = useFinances();
 
   const [viewMode, setViewMode] = useState<ViewMode>("type");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -35,6 +36,7 @@ export const FinancialSummaryCard = () => {
   const [selectedExecuted, setSelectedExecuted] = useState<Set<string>>(new Set());
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [docsDialogOpen, setDocsDialogOpen] = useState(false);
+  const [showPreviousMonth, setShowPreviousMonth] = useState(false);
 
   const transactionIds = useMemo(() => transactions.map(t => t.id), [transactions]);
   const { hasDocuments } = useTransactionDocumentCounts(transactionIds);
@@ -86,20 +88,40 @@ export const FinancialSummaryCard = () => {
     });
   }, [transfers, selectedTypes, selectedAccounts]);
 
+  const previousMonthBalances = useMemo(() => {
+    const balances: Record<string, number> = {};
+    accounts.forEach((acc) => {
+      balances[acc.name] = getPreviousMonthBalanceByAccount(acc.name);
+    });
+    return balances;
+  }, [accounts, currentMonth, getPreviousMonthBalanceByAccount]);
+
+  const previousMonthTotal = useMemo(() => {
+    if (!showPreviousMonth) return 0;
+    let total = 0;
+    accounts.forEach((acc) => {
+      if (selectedAccounts.size > 0 && !selectedAccounts.has(acc.name)) return;
+      total += previousMonthBalances[acc.name] || 0;
+    });
+    return total;
+  }, [showPreviousMonth, accounts, selectedAccounts, previousMonthBalances]);
+
   const grandTotal = useMemo(() => {
     let total = 0;
     filteredTransactions.forEach((t) => {
       total += t.category === "income" ? t.amount : -t.amount;
     });
-    // Include transfers effect when filtering by account (not zero-sum in that case)
-    filteredTransfers.forEach((t) => {
-      if (selectedAccounts.size > 0) {
+    // Transfers: when no account filter, they're zero-sum so no effect on total.
+    // When filtering by account, they affect the total for those accounts.
+    if (selectedAccounts.size > 0) {
+      filteredTransfers.forEach((t) => {
         if (selectedAccounts.has(t.toAccount)) total += t.amount;
         if (selectedAccounts.has(t.fromAccount)) total -= t.amount;
-      }
-    });
+      });
+    }
+    total += previousMonthTotal;
     return total;
-  }, [filteredTransactions, filteredTransfers, selectedAccounts]);
+  }, [filteredTransactions, filteredTransfers, selectedAccounts, previousMonthTotal]);
 
   const groupedByType = useMemo(() => {
     const groups: Record<string, { transactions: Transaction[]; total: number }> = {};
@@ -235,6 +257,18 @@ export const FinancialSummaryCard = () => {
           ))}
         </div>
 
+        {/* Previous month balance toggle */}
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="showPrevMonth"
+            checked={showPreviousMonth}
+            onCheckedChange={(checked) => setShowPreviousMonth(checked === true)}
+          />
+          <label htmlFor="showPrevMonth" className="text-[10px] text-muted-foreground cursor-pointer">
+            Incluir saldo mes anterior
+          </label>
+        </div>
+
         {/* Content */}
         <div className="border rounded-md overflow-hidden text-xs">
           {viewMode === "type" ? (
@@ -256,6 +290,17 @@ export const FinancialSummaryCard = () => {
               hasDocuments={(id) => hasDocuments(id)}
               transactions={transactions}
             />
+          )}
+
+          {/* Previous month balance row */}
+          {showPreviousMonth && (
+            <div className="flex justify-between items-center px-2 py-1 border-t text-muted-foreground">
+              <span>Saldo mes anterior</span>
+              <span className={previousMonthTotal >= 0 ? "text-green-600" : "text-red-600"}>
+                {previousMonthTotal >= 0 ? "+" : ""}
+                {previousMonthTotal.toFixed(2)}€
+              </span>
+            </div>
           )}
 
           {/* Grand total */}
