@@ -23,7 +23,9 @@ export const ShiftDialog = ({ selectedDate, open, onOpenChange }: ShiftDialogPro
   const [selectedCompanions, setSelectedCompanions] = useState<string[]>([]);
   const [isHolidayShift, setIsHolidayShift] = useState(false);
 
-  const dateStr = selectedDate ? selectedDate.toISOString().split("T")[0] : "";
+  const dateStr = selectedDate
+    ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`
+    : "";
   const dayData = days[dateStr];
 
   useEffect(() => {
