@@ -77,10 +77,10 @@ export const AccountBalanceTable = () => {
     const previousMonth = round2(getPreviousMonthBalanceByAccount(account.name));
     const pending = round2(getPendingByAccount(account.name));
     const transfersBalance = round2(getTransfersBalanceByAccount(account.name));
-    const total = round2(balance + 
+    const total = round2(balance + transfersBalance +
       (showPreviousMonth ? previousMonth : 0) + 
       (showPending ? pending : 0));
-    return { name: account.name, balance, previousMonth, pending, transfersBalance, total };
+    return { name: account.name, balance: round2(balance + transfersBalance), previousMonth, pending, transfersBalance, total };
   });
 
   // Calculate totals by summing the rounded individual values

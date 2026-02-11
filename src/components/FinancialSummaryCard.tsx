@@ -91,9 +91,15 @@ export const FinancialSummaryCard = () => {
     filteredTransactions.forEach((t) => {
       total += t.category === "income" ? t.amount : -t.amount;
     });
-    // Transfers are zero-sum, don't add to total
+    // Include transfers effect when filtering by account (not zero-sum in that case)
+    filteredTransfers.forEach((t) => {
+      if (selectedAccounts.size > 0) {
+        if (selectedAccounts.has(t.toAccount)) total += t.amount;
+        if (selectedAccounts.has(t.fromAccount)) total -= t.amount;
+      }
+    });
     return total;
-  }, [filteredTransactions]);
+  }, [filteredTransactions, filteredTransfers, selectedAccounts]);
 
   const groupedByType = useMemo(() => {
     const groups: Record<string, { transactions: Transaction[]; total: number }> = {};
