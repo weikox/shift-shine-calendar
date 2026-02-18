@@ -26,7 +26,11 @@ const EXECUTED_OPTIONS = [
   { value: "no", label: "Pendientes" },
 ];
 
-export const FinancialSummaryCard = () => {
+interface FinancialSummaryCardProps {
+  onEditTransaction?: (id: string, category: Transaction["category"]) => void;
+}
+
+export const FinancialSummaryCard = ({ onEditTransaction }: FinancialSummaryCardProps = {}) => {
   const { transactions, transfers, accounts, currentMonth, getPreviousMonthBalanceByAccount } = useFinances();
 
   const [viewMode, setViewMode] = useState<ViewMode>("type");
@@ -57,11 +61,17 @@ export const FinancialSummaryCard = () => {
     setter(next);
   };
 
-  const handleTransactionClick = (t: Transaction) => {
+  const handleTransactionClick = (t: Transaction, forceEdit?: boolean) => {
+    if (forceEdit && onEditTransaction) {
+      onEditTransaction(t.id, t.category);
+      return;
+    }
     const hasDocs = (t.documents && t.documents.length > 0) || hasDocuments(t.id);
     if (hasDocs) {
       setSelectedTransaction(t);
       setDocsDialogOpen(true);
+    } else if (onEditTransaction) {
+      onEditTransaction(t.id, t.category);
     }
   };
 
@@ -150,7 +160,7 @@ export const FinancialSummaryCard = () => {
   }, [filteredTransactions, filteredTransfers, selectedAccounts]);
 
   const groupedByAccount = useMemo(() => {
-    const groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean; transactionId?: string }>; total: number }> = {};
+    const groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean; transactionId?: string; date?: string }>; total: number }> = {};
     accounts.forEach((acc) => {
       if (selectedAccounts.size > 0 && !selectedAccounts.has(acc.name)) return;
       groups[acc.name] = { items: [], total: 0 };
@@ -159,7 +169,7 @@ export const FinancialSummaryCard = () => {
     filteredTransactions.forEach((t) => {
       if (!groups[t.account]) return;
       const signedAmount = t.category === "income" ? t.amount : -t.amount;
-      groups[t.account].items.push({ name: t.name, amount: signedAmount, transactionId: t.id });
+      groups[t.account].items.push({ name: t.name, amount: signedAmount, transactionId: t.id, date: t.date });
       groups[t.account].total += signedAmount;
     });
 
@@ -169,6 +179,7 @@ export const FinancialSummaryCard = () => {
           name: `→ ${t.toAccount}${t.note ? ` (${t.note})` : ""}`,
           amount: -t.amount,
           isTransfer: true,
+          date: t.date,
         });
         groups[t.fromAccount].total -= t.amount;
       }
@@ -177,6 +188,7 @@ export const FinancialSummaryCard = () => {
           name: `← ${t.fromAccount}${t.note ? ` (${t.note})` : ""}`,
           amount: t.amount,
           isTransfer: true,
+          date: t.date,
         });
         groups[t.toAccount].total += t.amount;
       }
@@ -382,17 +394,18 @@ function TypeView({
                   .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
                   .map((t) => {
                     const hasDocs = (t.documents && t.documents.length > 0) || hasDocuments(t.id);
+                    const dayNum = t.date ? parseInt(t.date.split("-")[2]) : null;
                     return (
                       <div
                         key={t.id}
-                        onClick={() => hasDocs && onTransactionClick(t)}
-                        className={cn(
-                          "flex items-center justify-between px-4 py-0.5 border-b border-border/50",
-                          hasDocs && "cursor-pointer hover:bg-muted/40"
-                        )}
+                        onClick={() => onTransactionClick(t)}
+                        className="flex items-center justify-between px-4 py-0.5 border-b border-border/50 cursor-pointer hover:bg-muted/40"
                       >
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", t.executed ? "bg-green-500" : "bg-yellow-500")} />
+                          {dayNum !== null && (
+                            <span className="text-muted-foreground flex-shrink-0 w-4 text-right">{dayNum}</span>
+                          )}
                           <span className="truncate">{t.name}</span>
                           {hasDocs && <Paperclip className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
                           <span className="text-muted-foreground flex-shrink-0">{t.account}</span>
@@ -431,20 +444,30 @@ function TypeView({
           </button>
           {expandedGroups.has("transfers") && (
             <div className="bg-muted/20">
-              {filteredTransfers.map((t) => (
+              {filteredTransfers
+                .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
+                .map((t) => {
+                const dayNum = t.date ? parseInt(t.date.split("-")[2]) : null;
+                return (
                 <div
                   key={t.id}
                   className="flex items-center justify-between px-4 py-0.5 border-b border-border/50"
                 >
-                  <span className="truncate">
-                    {t.fromAccount} → {t.toAccount}
-                    {t.note ? ` (${t.note})` : ""}
-                  </span>
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    {dayNum !== null && (
+                      <span className="text-muted-foreground flex-shrink-0 w-4 text-right">{dayNum}</span>
+                    )}
+                    <span className="truncate">
+                      {t.fromAccount} → {t.toAccount}
+                      {t.note ? ` (${t.note})` : ""}
+                    </span>
+                  </div>
                   <span className="text-muted-foreground flex-shrink-0 ml-2">
                     {t.amount.toFixed(2)}€
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -462,7 +485,7 @@ function AccountView({
   hasDocuments,
   transactions,
 }: {
-  groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean; transactionId?: string }>; total: number }>;
+  groups: Record<string, { items: Array<{ name: string; amount: number; isTransfer?: boolean; transactionId?: string; date?: string }>; total: number }>;
   expandedGroups: Set<string>;
   toggleGroup: (key: string) => void;
   onTransactionClick: (t: Transaction) => void;
@@ -503,19 +526,25 @@ function AccountView({
             </button>
             {isExpanded && (
               <div className="bg-muted/20">
-                {group.items.map((item, i) => {
+                {[...group.items]
+                  .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
+                  .map((item, i) => {
                   const tx = item.transactionId ? transactions.find(t => t.id === item.transactionId) : undefined;
                   const hasDocs = tx ? ((tx.documents && tx.documents.length > 0) || hasDocuments(tx.id)) : false;
+                  const dayNum = item.date ? parseInt(item.date.split("-")[2]) : null;
                   return (
                     <div
                       key={i}
-                      onClick={() => hasDocs && tx && onTransactionClick(tx)}
+                      onClick={() => tx ? onTransactionClick(tx) : undefined}
                       className={cn(
                         "flex items-center justify-between px-4 py-0.5 border-b border-border/50",
-                        hasDocs && "cursor-pointer hover:bg-muted/40"
+                        tx && "cursor-pointer hover:bg-muted/40"
                       )}
                     >
-                      <div className="flex items-center gap-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        {dayNum !== null && (
+                          <span className="text-muted-foreground flex-shrink-0 w-4 text-right">{dayNum}</span>
+                        )}
                         <span className={cn("truncate", item.isTransfer && "italic text-muted-foreground")}>
                           {item.name}
                         </span>

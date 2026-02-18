@@ -1,11 +1,16 @@
-import { useFinances } from "@/contexts/FinancesContext";
+import { useState } from "react";
+import { useFinances, Transaction } from "@/contexts/FinancesContext";
 import { FinancialSummaryCard } from "@/components/FinancialSummaryCard";
+import { TransactionDialog } from "@/components/TransactionDialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const FinancialSummary = () => {
   const { currentMonth, setCurrentMonth } = useFinances();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCategory, setEditCategory] = useState<Transaction["category"]>("daily");
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const navigateMonth = (delta: number) => {
     const [y, m] = currentMonth.split("-").map(Number);
@@ -18,6 +23,12 @@ const FinancialSummary = () => {
     const d = new Date(parseInt(y), parseInt(m) - 1);
     return d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
   })();
+
+  const handleEditTransaction = (id: string, category: Transaction["category"]) => {
+    setEditingId(id);
+    setEditCategory(category);
+    setDialogOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-background p-4">
@@ -39,8 +50,15 @@ const FinancialSummary = () => {
             </Button>
           </div>
         </div>
-        <FinancialSummaryCard />
+        <FinancialSummaryCard onEditTransaction={handleEditTransaction} />
       </div>
+
+      <TransactionDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        category={editCategory}
+        transactionId={editingId ?? undefined}
+      />
     </div>
   );
 };
