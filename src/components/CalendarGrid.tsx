@@ -207,9 +207,19 @@ export const CalendarGrid = ({ currentDate }: CalendarGridProps) => {
                         </div>
                       )}
                       
-                      {/* Show history: events + daily expenses + income */}
+                      {/* Show history: shift + events + daily expenses + income */}
                       {mode === "history" && (
                         <div className="mt-1 space-y-0.5 flex-1 overflow-hidden">
+                          {dayData?.shift && (
+                            <div
+                              className={cn(
+                                "text-xs px-1.5 py-0.5 rounded font-bold text-center",
+                                getShiftColor(dayData.shift, dayData.isHolidayShift)
+                              )}
+                            >
+                              {getShiftLabel(dayData.shift, dayData.isHolidayShift)}
+                            </div>
+                          )}
                           {events.map((event) => (
                             <div
                               key={event.id}
