@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Progress } from "@/components/ui/progress";
-import { Upload, X, Eye, Camera, CalendarIcon, Loader2 } from "lucide-react";
+import { Upload, X, Eye, Camera, CalendarIcon, Loader2, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { createWorker } from 'tesseract.js';
 import { format, parse } from "date-fns";
@@ -17,6 +17,7 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useDocumentStorage, CloudDocument } from "@/hooks/useDocumentStorage";
 import { useStorageMethod } from "@/hooks/useStorageMethod";
+import { generateAutoTicket, getDeviceLocation } from "@/utils/generateAutoTicket";
 
 interface TransactionDialogProps {
   open: boolean;
@@ -54,6 +55,8 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
   const [viewingDoc, setViewingDoc] = useState<string | null>(null);
   const [processingOCR, setProcessingOCR] = useState(false);
   const [loadingDocs, setLoadingDocs] = useState(false);
+  const [autoTicket, setAutoTicket] = useState(false);
+  const [generatingTicket, setGeneratingTicket] = useState(false);
 
   const isCloudMode = storageMethod === 'cloud' || storageMethod === 'hybrid';
   
@@ -116,6 +119,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
     setPeriodicity('monthly');
     setSelectedCategory(category);
     setDocuments([]);
+    setAutoTicket(false);
   };
 
   const processImageWithOCR = async (imageData: string) => {
@@ -233,8 +237,51 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Generate auto ticket if checked
+    let allDocuments = [...documents];
+    if (autoTicket && selectedCategory === 'daily') {
+      setGeneratingTicket(true);
+      try {
+        toast.info("Obteniendo ubicación y generando ticket...");
+        const location = await getDeviceLocation();
+        const ticketFile = await generateAutoTicket({
+          name: name.trim(),
+          amount: parseFloat(amount) || 0,
+          date: format(transactionDate, "d 'de' MMMM, yyyy", { locale: es }),
+          account,
+          location,
+        });
+
+        if (isCloudMode && transactionId) {
+          const cloudDoc = await uploadDocument(ticketFile, transactionId);
+          if (cloudDoc) allDocuments.push(cloudDoc);
+        } else {
+          // Store as base64 local document
+          const reader = new FileReader();
+          const localDoc = await new Promise<LocalDocument>((resolve) => {
+            reader.onload = (event) => {
+              resolve({
+                id: `auto-ticket-${Date.now()}`,
+                name: ticketFile.name,
+                type: ticketFile.type,
+                data: event.target?.result as string,
+              });
+            };
+            reader.readAsDataURL(ticketFile);
+          });
+          allDocuments.push(localDoc);
+        }
+        toast.success("Auto ticket generado");
+      } catch (error) {
+        console.error("Error generating auto ticket:", error);
+        toast.error("Error al generar auto ticket");
+      } finally {
+        setGeneratingTicket(false);
+      }
+    }
+
     // For local documents that need to be uploaded when creating new transaction
-    const localDocs = documents.filter((d): d is LocalDocument => !isCloudDocument(d));
+    const localDocs = allDocuments.filter((d): d is LocalDocument => !isCloudDocument(d));
     
     const transactionData = {
       name: name.trim(),
@@ -385,6 +432,20 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
               <Label htmlFor="executed">Ejecutado</Label>
             </div>
 
+            {selectedCategory === 'daily' && (
+              <div className="flex items-center space-x-2 p-3 rounded-md border border-dashed border-primary/40 bg-primary/5">
+                <Checkbox
+                  id="autoTicket"
+                  checked={autoTicket}
+                  onCheckedChange={(checked) => setAutoTicket(checked as boolean)}
+                />
+                <Receipt className="h-4 w-4 text-primary" />
+                <Label htmlFor="autoTicket" className="text-sm cursor-pointer">
+                  Generar auto ticket (ticket simulado con ubicación)
+                </Label>
+              </div>
+            )}
+
             <div>
               <Label>
                 Documentos adjuntos 
@@ -462,8 +523,12 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={uploadProgress.uploading}>
-                {transactionId ? 'Actualizar' : 'Añadir'}
+              <Button type="submit" disabled={uploadProgress.uploading || generatingTicket}>
+                {generatingTicket ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Generando ticket...</>
+                ) : (
+                  transactionId ? 'Actualizar' : 'Añadir'
+                )}
               </Button>
             </div>
           </form>
