@@ -237,8 +237,51 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Generate auto ticket if checked
+    let allDocuments = [...documents];
+    if (autoTicket && selectedCategory === 'daily') {
+      setGeneratingTicket(true);
+      try {
+        toast.info("Obteniendo ubicación y generando ticket...");
+        const location = await getDeviceLocation();
+        const ticketFile = await generateAutoTicket({
+          name: name.trim(),
+          amount: parseFloat(amount) || 0,
+          date: format(transactionDate, "d 'de' MMMM, yyyy", { locale: es }),
+          account,
+          location,
+        });
+
+        if (isCloudMode && transactionId) {
+          const cloudDoc = await uploadDocument(ticketFile, transactionId);
+          if (cloudDoc) allDocuments.push(cloudDoc);
+        } else {
+          // Store as base64 local document
+          const reader = new FileReader();
+          const localDoc = await new Promise<LocalDocument>((resolve) => {
+            reader.onload = (event) => {
+              resolve({
+                id: `auto-ticket-${Date.now()}`,
+                name: ticketFile.name,
+                type: ticketFile.type,
+                data: event.target?.result as string,
+              });
+            };
+            reader.readAsDataURL(ticketFile);
+          });
+          allDocuments.push(localDoc);
+        }
+        toast.success("Auto ticket generado");
+      } catch (error) {
+        console.error("Error generating auto ticket:", error);
+        toast.error("Error al generar auto ticket");
+      } finally {
+        setGeneratingTicket(false);
+      }
+    }
+
     // For local documents that need to be uploaded when creating new transaction
-    const localDocs = documents.filter((d): d is LocalDocument => !isCloudDocument(d));
+    const localDocs = allDocuments.filter((d): d is LocalDocument => !isCloudDocument(d));
     
     const transactionData = {
       name: name.trim(),
