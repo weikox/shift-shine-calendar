@@ -119,6 +119,7 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
     setPeriodicity('monthly');
     setSelectedCategory(category);
     setDocuments([]);
+    setAutoTicket(false);
   };
 
   const processImageWithOCR = async (imageData: string) => {
