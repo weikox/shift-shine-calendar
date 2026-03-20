@@ -17,7 +17,7 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useDocumentStorage, CloudDocument } from "@/hooks/useDocumentStorage";
 import { useStorageMethod } from "@/hooks/useStorageMethod";
-import { generateAutoTicket, getDeviceLocation } from "@/utils/generateAutoTicket";
+import { generateAutoTicket, getDeviceLocation, reverseGeocode } from "@/utils/generateAutoTicket";
 
 interface TransactionDialogProps {
   open: boolean;
