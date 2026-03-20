@@ -523,8 +523,12 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={uploadProgress.uploading}>
-                {transactionId ? 'Actualizar' : 'Añadir'}
+              <Button type="submit" disabled={uploadProgress.uploading || generatingTicket}>
+                {generatingTicket ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Generando ticket...</>
+                ) : (
+                  transactionId ? 'Actualizar' : 'Añadir'
+                )}
               </Button>
             </div>
           </form>
