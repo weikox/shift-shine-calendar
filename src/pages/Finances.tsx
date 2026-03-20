@@ -36,46 +36,47 @@ const Finances = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen bg-background p-2 sm:p-4">
       <div className="max-w-7xl mx-auto">
-        <header className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link to="/">
-              <Button variant="outline" size="icon">
-                <Home className="h-4 w-4" />
+        <header className="mb-4 sm:mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+              <Link to="/">
+                <Button variant="outline" size="icon" className="h-8 w-8 sm:h-10 sm:w-10 shrink-0">
+                  <Home className="h-4 w-4" />
+                </Button>
+              </Link>
+              <h1 className="text-lg sm:text-3xl font-bold text-foreground truncate">Control de Gastos</h1>
+            </div>
+            <div className="flex gap-1 sm:gap-2 shrink-0">
+              <Button variant="outline" size="icon" className="h-8 w-8 sm:h-10 sm:w-10" onClick={() => setShowTransferDialog(true)}>
+                <ArrowLeftRight className="h-4 w-4" />
               </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">Control de Gastos</h1>
-              <p className="text-muted-foreground">Gestiona tus finanzas mensuales</p>
+              <Button variant="outline" size="icon" className="h-8 w-8 sm:h-10 sm:w-10" onClick={() => setShowConfig(true)}>
+                <Settings className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1 sm:gap-2">
             <input
               type="month"
               value={currentMonth}
               onChange={(e) => setCurrentMonth(e.target.value)}
-              className="px-3 py-2 rounded-md border border-input bg-background"
+              className="flex-1 min-w-0 px-2 sm:px-3 py-1.5 sm:py-2 text-sm rounded-md border border-input bg-background"
             />
-            <Button variant="outline" onClick={loadPreviousMonth}>
-              Cargar Pendientes
-            </Button>
-            <Button variant="outline" size="icon" onClick={() => setShowTransferDialog(true)}>
-              <ArrowLeftRight className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon" onClick={() => setShowConfig(true)}>
-              <Settings className="h-4 w-4" />
+            <Button variant="outline" size="sm" className="shrink-0 text-xs sm:text-sm" onClick={loadPreviousMonth}>
+              Pendientes
             </Button>
           </div>
         </header>
 
-        <Tabs defaultValue="fixed" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="fixed">Gastos Fijos</TabsTrigger>
-            <TabsTrigger value="periodic">Gastos Periódicos</TabsTrigger>
-            <TabsTrigger value="extra">Gastos Extra</TabsTrigger>
-            <TabsTrigger value="daily">Gastos Diarios</TabsTrigger>
-            <TabsTrigger value="income">Ingresos</TabsTrigger>
+        <Tabs defaultValue="fixed" className="space-y-3 sm:space-y-4">
+          <TabsList className="grid w-full grid-cols-5 h-auto">
+            <TabsTrigger value="fixed" className="text-[10px] sm:text-sm px-1 sm:px-3 py-1.5">Fijos</TabsTrigger>
+            <TabsTrigger value="periodic" className="text-[10px] sm:text-sm px-1 sm:px-3 py-1.5">Periódicos</TabsTrigger>
+            <TabsTrigger value="extra" className="text-[10px] sm:text-sm px-1 sm:px-3 py-1.5">Extra</TabsTrigger>
+            <TabsTrigger value="daily" className="text-[10px] sm:text-sm px-1 sm:px-3 py-1.5">Diarios</TabsTrigger>
+            <TabsTrigger value="income" className="text-[10px] sm:text-sm px-1 sm:px-3 py-1.5">Ingresos</TabsTrigger>
           </TabsList>
 
           <TabsContent value="fixed" className="space-y-4">
