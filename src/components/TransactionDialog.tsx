@@ -432,6 +432,20 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
               <Label htmlFor="executed">Ejecutado</Label>
             </div>
 
+            {selectedCategory === 'daily' && (
+              <div className="flex items-center space-x-2 p-3 rounded-md border border-dashed border-primary/40 bg-primary/5">
+                <Checkbox
+                  id="autoTicket"
+                  checked={autoTicket}
+                  onCheckedChange={(checked) => setAutoTicket(checked as boolean)}
+                />
+                <Receipt className="h-4 w-4 text-primary" />
+                <Label htmlFor="autoTicket" className="text-sm cursor-pointer">
+                  Generar auto ticket (ticket simulado con ubicación)
+                </Label>
+              </div>
+            )}
+
             <div>
               <Label>
                 Documentos adjuntos 
