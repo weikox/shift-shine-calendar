@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Progress } from "@/components/ui/progress";
-import { Upload, X, Eye, Camera, CalendarIcon, Loader2 } from "lucide-react";
+import { Upload, X, Eye, Camera, CalendarIcon, Loader2, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { createWorker } from 'tesseract.js';
 import { format, parse } from "date-fns";
@@ -17,6 +17,7 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useDocumentStorage, CloudDocument } from "@/hooks/useDocumentStorage";
 import { useStorageMethod } from "@/hooks/useStorageMethod";
+import { generateAutoTicket, getDeviceLocation } from "@/utils/generateAutoTicket";
 
 interface TransactionDialogProps {
   open: boolean;
