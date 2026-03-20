@@ -244,12 +244,14 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
       try {
         toast.info("Obteniendo ubicación y generando ticket...");
         const location = await getDeviceLocation();
+        const address = location ? await reverseGeocode(location.latitude, location.longitude) : null;
         const ticketFile = await generateAutoTicket({
           name: name.trim(),
           amount: parseFloat(amount) || 0,
           date: format(transactionDate, "d 'de' MMMM, yyyy", { locale: es }),
           account,
           location,
+          address,
         });
 
         if (isCloudMode && transactionId) {
