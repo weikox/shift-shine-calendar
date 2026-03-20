@@ -55,6 +55,8 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
   const [viewingDoc, setViewingDoc] = useState<string | null>(null);
   const [processingOCR, setProcessingOCR] = useState(false);
   const [loadingDocs, setLoadingDocs] = useState(false);
+  const [autoTicket, setAutoTicket] = useState(false);
+  const [generatingTicket, setGeneratingTicket] = useState(false);
 
   const isCloudMode = storageMethod === 'cloud' || storageMethod === 'hybrid';
   
