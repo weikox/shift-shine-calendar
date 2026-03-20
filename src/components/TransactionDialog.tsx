@@ -17,7 +17,7 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useDocumentStorage, CloudDocument } from "@/hooks/useDocumentStorage";
 import { useStorageMethod } from "@/hooks/useStorageMethod";
-import { generateAutoTicket, getDeviceLocation } from "@/utils/generateAutoTicket";
+import { generateAutoTicket, getDeviceLocation, reverseGeocode } from "@/utils/generateAutoTicket";
 
 interface TransactionDialogProps {
   open: boolean;
@@ -244,12 +244,14 @@ export const TransactionDialog = ({ open, onOpenChange, category, transactionId 
       try {
         toast.info("Obteniendo ubicación y generando ticket...");
         const location = await getDeviceLocation();
+        const address = location ? await reverseGeocode(location.latitude, location.longitude) : null;
         const ticketFile = await generateAutoTicket({
           name: name.trim(),
           amount: parseFloat(amount) || 0,
           date: format(transactionDate, "d 'de' MMMM, yyyy", { locale: es }),
           account,
           location,
+          address,
         });
 
         if (isCloudMode && transactionId) {
