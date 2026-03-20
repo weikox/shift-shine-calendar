@@ -103,40 +103,40 @@ export const AccountBalanceTable = () => {
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle>Balance de Cuentas</CardTitle>
-          <div className="flex gap-4 mt-2">
-            <div className="flex items-center gap-2">
+        <CardHeader className="px-3 sm:px-6 py-3 sm:py-6">
+          <CardTitle className="text-base sm:text-2xl">Balance de Cuentas</CardTitle>
+          <div className="flex gap-3 sm:gap-4 mt-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Checkbox 
                 id="show-previous"
                 checked={showPreviousMonth} 
                 onCheckedChange={(checked) => setShowPreviousMonth(checked as boolean)}
               />
-              <Label htmlFor="show-previous" className="cursor-pointer text-sm">
-                Mostrar Mes Anterior
+              <Label htmlFor="show-previous" className="cursor-pointer text-xs sm:text-sm">
+                Mes Anterior
               </Label>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Checkbox 
                 id="show-pending"
                 checked={showPending} 
                 onCheckedChange={(checked) => setShowPending(checked as boolean)}
               />
-              <Label htmlFor="show-pending" className="cursor-pointer text-sm">
-                Mostrar Pendientes
+              <Label htmlFor="show-pending" className="cursor-pointer text-xs sm:text-sm">
+                Pendientes
               </Label>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-1 sm:px-6">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Cuenta</TableHead>
-                <TableHead className="text-right">Saldo Actual</TableHead>
-                {showPreviousMonth && <TableHead className="text-right">Mes Anterior</TableHead>}
-                {showPending && <TableHead className="text-right">Pendientes</TableHead>}
-                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="px-1.5 sm:px-4 text-xs sm:text-sm">Cuenta</TableHead>
+                <TableHead className="text-right px-1.5 sm:px-4 text-xs sm:text-sm">Saldo</TableHead>
+                {showPreviousMonth && <TableHead className="text-right px-1.5 sm:px-4 text-xs sm:text-sm">Ant.</TableHead>}
+                {showPending && <TableHead className="text-right px-1.5 sm:px-4 text-xs sm:text-sm">Pend.</TableHead>}
+                <TableHead className="text-right px-1.5 sm:px-4 text-xs sm:text-sm">Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -146,55 +146,55 @@ export const AccountBalanceTable = () => {
                   className="cursor-pointer hover:bg-accent"
                   onClick={() => setSelectedAccount(account.name)}
                 >
-                  <TableCell className="font-medium">{account.name}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="font-medium px-1.5 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">{account.name}</TableCell>
+                  <TableCell className="text-right px-1.5 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                     <span className={account.balance >= 0 ? 'text-green-600' : 'text-red-600'}>
                       {account.balance.toFixed(2)}€
                     </span>
                   </TableCell>
                   {showPreviousMonth && (
-                    <TableCell className="text-right">
+                    <TableCell className="text-right px-1.5 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                       <span className={account.previousMonth >= 0 ? 'text-green-600' : 'text-red-600'}>
                         {account.previousMonth.toFixed(2)}€
                       </span>
                     </TableCell>
                   )}
                   {showPending && (
-                    <TableCell className="text-right">
+                    <TableCell className="text-right px-1.5 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                       <span className={account.pending >= 0 ? 'text-green-600' : 'text-red-600'}>
                         {account.pending.toFixed(2)}€
                       </span>
                     </TableCell>
                   )}
-                  <TableCell className="text-right font-medium">
+                  <TableCell className="text-right font-medium px-1.5 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                     <span className={account.total >= 0 ? 'text-green-600' : 'text-red-600'}>
                       {account.total.toFixed(2)}€
                     </span>
                   </TableCell>
                 </TableRow>
               ))}
-              <TableRow className="font-bold text-lg border-t-2">
-                <TableCell>TOTAL</TableCell>
-                <TableCell className="text-right">
+              <TableRow className="font-bold text-sm sm:text-lg border-t-2">
+                <TableCell className="px-1.5 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">TOTAL</TableCell>
+                <TableCell className="text-right px-1.5 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                   <span className={totalBalance >= 0 ? 'text-green-600' : 'text-red-600'}>
                     {totalBalance.toFixed(2)}€
                   </span>
                 </TableCell>
                 {showPreviousMonth && (
-                  <TableCell className="text-right">
+                  <TableCell className="text-right px-1.5 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                     <span className={totalPreviousMonth >= 0 ? 'text-green-600' : 'text-red-600'}>
                       {totalPreviousMonth.toFixed(2)}€
                     </span>
                   </TableCell>
                 )}
                 {showPending && (
-                  <TableCell className="text-right">
+                  <TableCell className="text-right px-1.5 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                     <span className={totalPending >= 0 ? 'text-green-600' : 'text-red-600'}>
                       {totalPending.toFixed(2)}€
                     </span>
                   </TableCell>
                 )}
-                <TableCell className="text-right">
+                <TableCell className="text-right px-1.5 sm:px-4 py-2 sm:py-4 text-xs sm:text-sm">
                   <span className={grandTotal >= 0 ? 'text-green-600' : 'text-red-600'}>
                     {grandTotal.toFixed(2)}€
                   </span>
