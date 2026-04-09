@@ -23,8 +23,6 @@ const DEFAULT_CORNERS: Corners = [
 const DEFAULT_EMBED_URL = "https://rtsp.me/embed/ZBbRS9ke/";
 
 function solveProjection(src: Corners, dst: Corners): number[] {
-  // Solve 8-parameter perspective transform: dst = H * src
-  // Using DLT (Direct Linear Transform)
   const A: number[][] = [];
   const b: number[] = [];
   for (let i = 0; i < 4; i++) {
@@ -35,7 +33,6 @@ function solveProjection(src: Corners, dst: Corners): number[] {
     A.push([0, 0, 0, sx, sy, 1, -dy * sx, -dy * sy]);
     b.push(dy);
   }
-  // Gaussian elimination
   const n = 8;
   const M = A.map((row, i) => [...row, b[i]]);
   for (let col = 0; col < n; col++) {
@@ -64,6 +61,56 @@ function applyPerspective(h: number[], x: number, y: number): [number, number] {
   ];
 }
 
+function renderCorrected(
+  img: HTMLImageElement,
+  canvas: HTMLCanvasElement,
+  corners: Corners
+) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const outW = canvas.width;
+  const outH = canvas.height;
+  const imgW = img.naturalWidth;
+  const imgH = img.naturalHeight;
+
+  const srcPx: Corners = corners.map(c => ({ x: c.x * imgW, y: c.y * imgH })) as Corners;
+  const dstPx: Corners = [
+    { x: 0, y: 0 },
+    { x: outW, y: 0 },
+    { x: outW, y: outH },
+    { x: 0, y: outH },
+  ];
+
+  const h = solveProjection(dstPx, srcPx);
+
+  // Use offscreen canvas for source data
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = imgW;
+  srcCanvas.height = imgH;
+  const srcCtx = srcCanvas.getContext('2d')!;
+  srcCtx.drawImage(img, 0, 0);
+  const srcData = srcCtx.getImageData(0, 0, imgW, imgH);
+
+  const outData = ctx.createImageData(outW, outH);
+  for (let y = 0; y < outH; y++) {
+    for (let x = 0; x < outW; x++) {
+      const [sx, sy] = applyPerspective(h, x, y);
+      const si = Math.round(sx);
+      const sj = Math.round(sy);
+      const outIdx = (y * outW + x) * 4;
+      if (si >= 0 && si < imgW && sj >= 0 && sj < imgH) {
+        const srcIdx = (sj * imgW + si) * 4;
+        outData.data[outIdx] = srcData.data[srcIdx];
+        outData.data[outIdx + 1] = srcData.data[srcIdx + 1];
+        outData.data[outIdx + 2] = srcData.data[srcIdx + 2];
+        outData.data[outIdx + 3] = 255;
+      }
+    }
+  }
+  ctx.putImageData(outData, 0, 0);
+}
+
 const Nevera = () => {
   const navigate = useNavigate();
   const { storageMethod } = useStorageMethod();
@@ -75,11 +122,14 @@ const Nevera = () => {
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
 
-  const sourceCanvasRef = useRef<HTMLCanvasElement>(null);
-  const outputCanvasRef = useRef<HTMLCanvasElement>(null);
+  const mainCanvasRef = useRef<HTMLCanvasElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const configCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mainContainerRef = useRef<HTMLDivElement>(null);
+  const cornersRef = useRef(corners);
+  cornersRef.current = corners;
 
   // Load config
   useEffect(() => {
@@ -143,15 +193,32 @@ const Nevera = () => {
 
       if (error) throw error;
 
-      // data is the raw image response
-      const blob = new Blob([data], { type: 'image/jpeg' });
+      const blob = data instanceof Blob ? data : new Blob([data], { type: 'image/jpeg' });
       const url = URL.createObjectURL(blob);
 
       const img = new Image();
       img.onload = () => {
         imageRef.current = img;
-        drawOutput();
-        if (configMode) drawConfig();
+        // Render to appropriate canvases
+        const main = mainCanvasRef.current;
+        if (main) {
+          const container = mainContainerRef.current;
+          if (container) {
+            const w = container.clientWidth;
+            const h = Math.min(w * 0.75, window.innerHeight - 120);
+            main.width = w;
+            main.height = h;
+          }
+          renderCorrected(img, main, cornersRef.current);
+        }
+        const preview = previewCanvasRef.current;
+        if (preview) {
+          renderCorrected(img, preview, cornersRef.current);
+        }
+        const configCanvas = configCanvasRef.current;
+        if (configCanvas) {
+          drawConfigOverlay(configCanvas, img, cornersRef.current, null);
+        }
         URL.revokeObjectURL(url);
       };
       img.src = url;
@@ -160,111 +227,9 @@ const Nevera = () => {
     } finally {
       setLoading(false);
     }
-  }, [embedUrl, corners, configMode]);
+  }, [embedUrl]);
 
-  const drawOutput = useCallback(() => {
-    const img = imageRef.current;
-    const canvas = outputCanvasRef.current;
-    if (!img || !canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const outW = canvas.width;
-    const outH = canvas.height;
-    const imgW = img.naturalWidth;
-    const imgH = img.naturalHeight;
-
-    // Source corners in pixel coords
-    const srcPx: Corners = corners.map(c => ({ x: c.x * imgW, y: c.y * imgH })) as Corners;
-    // Destination is the full output rectangle
-    const dstPx: Corners = [
-      { x: 0, y: 0 },
-      { x: outW, y: 0 },
-      { x: outW, y: outH },
-      { x: 0, y: outH },
-    ];
-
-    // We need the inverse transform: for each output pixel, find source pixel
-    const h = solveProjection(dstPx, srcPx);
-
-    // Draw source image to hidden canvas to get pixel data
-    const srcCanvas = sourceCanvasRef.current;
-    if (!srcCanvas) return;
-    srcCanvas.width = imgW;
-    srcCanvas.height = imgH;
-    const srcCtx = srcCanvas.getContext('2d');
-    if (!srcCtx) return;
-    srcCtx.drawImage(img, 0, 0);
-    const srcData = srcCtx.getImageData(0, 0, imgW, imgH);
-
-    const outData = ctx.createImageData(outW, outH);
-
-    for (let y = 0; y < outH; y++) {
-      for (let x = 0; x < outW; x++) {
-        const [sx, sy] = applyPerspective(h, x, y);
-        const si = Math.round(sx);
-        const sj = Math.round(sy);
-        const outIdx = (y * outW + x) * 4;
-        if (si >= 0 && si < imgW && sj >= 0 && sj < imgH) {
-          const srcIdx = (sj * imgW + si) * 4;
-          outData.data[outIdx] = srcData.data[srcIdx];
-          outData.data[outIdx + 1] = srcData.data[srcIdx + 1];
-          outData.data[outIdx + 2] = srcData.data[srcIdx + 2];
-          outData.data[outIdx + 3] = 255;
-        }
-      }
-    }
-    ctx.putImageData(outData, 0, 0);
-  }, [corners]);
-
-  const drawConfig = useCallback(() => {
-    const img = imageRef.current;
-    const canvas = configCanvasRef.current;
-    if (!img || !canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const cw = canvas.width;
-    const ch = canvas.height;
-
-    ctx.clearRect(0, 0, cw, ch);
-    ctx.drawImage(img, 0, 0, cw, ch);
-
-    // Draw polygon
-    ctx.beginPath();
-    corners.forEach((c, i) => {
-      const px = c.x * cw;
-      const py = c.y * ch;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    });
-    ctx.closePath();
-    ctx.strokeStyle = '#00ff00';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Draw corner handles
-    const labels = ['TL', 'TR', 'BR', 'BL'];
-    corners.forEach((c, i) => {
-      const px = c.x * cw;
-      const py = c.y * ch;
-      ctx.beginPath();
-      ctx.arc(px, py, 8, 0, Math.PI * 2);
-      ctx.fillStyle = dragging === i ? '#ff0000' : '#00ff00';
-      ctx.fill();
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = '#000';
-      ctx.font = '10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(labels[i], px, py + 3);
-    });
-  }, [corners, dragging]);
-
-  // Auto-refresh
+  // Auto-refresh for main view
   useEffect(() => {
     if (configMode) return;
     fetchSnapshot();
@@ -272,69 +237,72 @@ const Nevera = () => {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [configMode, refreshInterval, embedUrl, corners]);
+  }, [configMode, refreshInterval, fetchSnapshot]);
 
   // Redraw when corners change in config mode
   useEffect(() => {
-    if (configMode && imageRef.current) {
-      drawConfig();
-      drawOutput();
-    }
-  }, [corners, configMode, drawConfig, drawOutput]);
+    if (!configMode || !imageRef.current) return;
+    const configCanvas = configCanvasRef.current;
+    if (configCanvas) drawConfigOverlay(configCanvas, imageRef.current, corners, dragging);
+    const preview = previewCanvasRef.current;
+    if (preview) renderCorrected(imageRef.current, preview, corners);
+  }, [corners, configMode, dragging]);
 
-  // Config canvas mouse handling
-  const getCanvasPos = (e: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    return {
-      x: (e.clientX - rect.left) / rect.width,
-      y: (e.clientY - rect.top) / rect.height,
+  // Resize main canvas
+  useEffect(() => {
+    if (configMode) return;
+    const resize = () => {
+      const canvas = mainCanvasRef.current;
+      const container = mainContainerRef.current;
+      if (!canvas || !container) return;
+      const w = container.clientWidth;
+      const h = Math.min(w * 0.75, window.innerHeight - 120);
+      canvas.width = w;
+      canvas.height = h;
+      if (imageRef.current) renderCorrected(imageRef.current, canvas, cornersRef.current);
     };
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [configMode]);
+
+  const getCanvasPos = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const pos = getCanvasPos(e);
-    const threshold = 0.04;
     for (let i = 0; i < 4; i++) {
       const dx = pos.x - corners[i].x;
       const dy = pos.y - corners[i].y;
-      if (Math.sqrt(dx * dx + dy * dy) < threshold) {
-        setDragging(i);
-        return;
-      }
+      if (Math.sqrt(dx * dx + dy * dy) < 0.04) { setDragging(i); return; }
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (dragging === null) return;
     const pos = getCanvasPos(e);
-    const newCorners = [...corners] as Corners;
-    newCorners[dragging] = { x: Math.max(0, Math.min(1, pos.x)), y: Math.max(0, Math.min(1, pos.y)) };
-    setCorners(newCorners);
+    const nc = [...corners] as Corners;
+    nc[dragging] = { x: Math.max(0, Math.min(1, pos.x)), y: Math.max(0, Math.min(1, pos.y)) };
+    setCorners(nc);
   };
 
   const handleMouseUp = () => setDragging(null);
 
-  // Touch handling for mobile
-  const getTouchPos = (e: React.TouchEvent<HTMLCanvasElement>): { x: number; y: number } => {
+  const getTouchPos = (e: React.TouchEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const touch = e.touches[0];
-    return {
-      x: (touch.clientX - rect.left) / rect.width,
-      y: (touch.clientY - rect.top) / rect.height,
-    };
+    const t = e.touches[0];
+    return { x: (t.clientX - rect.left) / rect.width, y: (t.clientY - rect.top) / rect.height };
   };
 
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const pos = getTouchPos(e);
-    const threshold = 0.06;
     for (let i = 0; i < 4; i++) {
       const dx = pos.x - corners[i].x;
       const dy = pos.y - corners[i].y;
-      if (Math.sqrt(dx * dx + dy * dy) < threshold) {
-        setDragging(i);
-        return;
-      }
+      if (Math.sqrt(dx * dx + dy * dy) < 0.06) { setDragging(i); return; }
     }
   };
 
@@ -342,30 +310,10 @@ const Nevera = () => {
     e.preventDefault();
     if (dragging === null) return;
     const pos = getTouchPos(e);
-    const newCorners = [...corners] as Corners;
-    newCorners[dragging] = { x: Math.max(0, Math.min(1, pos.x)), y: Math.max(0, Math.min(1, pos.y)) };
-    setCorners(newCorners);
+    const nc = [...corners] as Corners;
+    nc[dragging] = { x: Math.max(0, Math.min(1, pos.x)), y: Math.max(0, Math.min(1, pos.y)) };
+    setCorners(nc);
   };
-
-  const handleTouchEnd = () => setDragging(null);
-
-  // Set output canvas size based on container
-  const outputContainerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const resize = () => {
-      const canvas = outputCanvasRef.current;
-      const container = outputContainerRef.current;
-      if (!canvas || !container) return;
-      const w = container.clientWidth;
-      const h = Math.min(w * 0.75, window.innerHeight - 120);
-      canvas.width = w;
-      canvas.height = h;
-      if (imageRef.current) drawOutput();
-    };
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
-  }, [drawOutput]);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
@@ -382,16 +330,7 @@ const Nevera = () => {
             <Button
               variant={configMode ? "default" : "outline"}
               size="sm"
-              onClick={() => {
-                if (configMode) {
-                  // Leaving config mode - fetch fresh snapshot with new corners
-                  setConfigMode(false);
-                } else {
-                  setConfigMode(true);
-                  // Fetch snapshot for config view
-                  fetchSnapshot();
-                }
-              }}
+              onClick={() => setConfigMode(!configMode)}
               className="gap-2"
             >
               {configMode ? <Eye className="h-4 w-4" /> : <Settings className="h-4 w-4" />}
@@ -400,33 +339,21 @@ const Nevera = () => {
           </div>
         </div>
 
-        <canvas ref={sourceCanvasRef} className="hidden" />
-
         {configMode ? (
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>URL del stream (embed)</Label>
-              <Input
-                value={embedUrl}
-                onChange={(e) => setEmbedUrl(e.target.value)}
-                placeholder="https://rtsp.me/embed/..."
-              />
+              <Input value={embedUrl} onChange={(e) => setEmbedUrl(e.target.value)} placeholder="https://rtsp.me/embed/..." />
             </div>
 
             <div className="space-y-2">
               <Label>Intervalo de refresco: {refreshInterval}s</Label>
-              <Slider
-                value={[refreshInterval]}
-                onValueChange={([v]) => setRefreshInterval(v)}
-                min={3}
-                max={60}
-                step={1}
-              />
+              <Slider value={[refreshInterval]} onValueChange={([v]) => setRefreshInterval(v)} min={3} max={60} step={1} />
             </div>
 
-            <div className="text-sm text-muted-foreground mb-2">
+            <p className="text-sm text-muted-foreground">
               Arrastra las esquinas verdes para ajustar el recorte de la pizarra:
-            </div>
+            </p>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
@@ -442,21 +369,16 @@ const Nevera = () => {
                   onMouseLeave={handleMouseUp}
                   onTouchStart={handleTouchStart}
                   onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
+                  onTouchEnd={() => setDragging(null)}
                 />
               </div>
               <div>
                 <p className="text-sm font-medium mb-1">Vista corregida</p>
-                <div ref={outputContainerRef}>
-                  <canvas
-                    ref={outputCanvasRef}
-                    className="w-full border rounded-lg"
-                  />
-                </div>
+                <canvas ref={previewCanvasRef} width={640} height={480} className="w-full border rounded-lg" />
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button onClick={saveConfig}>Guardar configuración</Button>
               <Button variant="outline" onClick={fetchSnapshot}>
                 <RefreshCw className="h-4 w-4 mr-2" />
@@ -468,16 +390,53 @@ const Nevera = () => {
             </div>
           </div>
         ) : (
-          <div ref={!configMode ? outputContainerRef : undefined}>
-            <canvas
-              ref={outputCanvasRef}
-              className="w-full rounded-lg"
-            />
+          <div ref={mainContainerRef}>
+            <canvas ref={mainCanvasRef} className="w-full rounded-lg" />
           </div>
         )}
       </div>
     </div>
   );
 };
+
+function drawConfigOverlay(
+  canvas: HTMLCanvasElement,
+  img: HTMLImageElement,
+  corners: Corners,
+  dragging: number | null
+) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const cw = canvas.width;
+  const ch = canvas.height;
+  ctx.clearRect(0, 0, cw, ch);
+  ctx.drawImage(img, 0, 0, cw, ch);
+
+  ctx.beginPath();
+  corners.forEach((c, i) => {
+    const px = c.x * cw, py = c.y * ch;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  });
+  ctx.closePath();
+  ctx.strokeStyle = '#00ff00';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  const labels = ['TL', 'TR', 'BR', 'BL'];
+  corners.forEach((c, i) => {
+    const px = c.x * cw, py = c.y * ch;
+    ctx.beginPath();
+    ctx.arc(px, py, 8, 0, Math.PI * 2);
+    ctx.fillStyle = dragging === i ? '#ff0000' : '#00ff00';
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#000';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(labels[i], px, py + 3);
+  });
+}
 
 export default Nevera;
