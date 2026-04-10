@@ -271,7 +271,7 @@ const Nevera = () => {
           lowLatencyMode: true,
           liveSyncDurationCount: 1,
           liveMaxLatencyDurationCount: 3,
-          loader: ProxyLoader as any,
+          loader: createProxyLoader() as any,
         });
         hls.loadSource(result.m3u8Url);
         hls.attachMedia(video);
