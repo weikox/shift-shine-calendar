@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import Hls from "hls.js";
 
 type Corner = { x: number; y: number };
 type Corners = [Corner, Corner, Corner, Corner]; // TL, TR, BR, BL
@@ -61,8 +62,8 @@ function applyPerspective(h: number[], x: number, y: number): [number, number] {
   ];
 }
 
-function renderCorrected(
-  img: HTMLImageElement,
+function renderCorrectedFromVideo(
+  video: HTMLVideoElement,
   canvas: HTMLCanvasElement,
   corners: Corners
 ) {
@@ -71,8 +72,10 @@ function renderCorrected(
 
   const outW = canvas.width;
   const outH = canvas.height;
-  const imgW = img.naturalWidth;
-  const imgH = img.naturalHeight;
+  const imgW = video.videoWidth;
+  const imgH = video.videoHeight;
+
+  if (!imgW || !imgH) return;
 
   const srcPx: Corners = corners.map(c => ({ x: c.x * imgW, y: c.y * imgH })) as Corners;
   const dstPx: Corners = [
@@ -84,12 +87,11 @@ function renderCorrected(
 
   const h = solveProjection(dstPx, srcPx);
 
-  // Use offscreen canvas for source data
   const srcCanvas = document.createElement('canvas');
   srcCanvas.width = imgW;
   srcCanvas.height = imgH;
   const srcCtx = srcCanvas.getContext('2d')!;
-  srcCtx.drawImage(img, 0, 0);
+  srcCtx.drawImage(video, 0, 0);
   const srcData = srcCtx.getImageData(0, 0, imgW, imgH);
 
   const outData = ctx.createImageData(outW, outH);
@@ -111,6 +113,46 @@ function renderCorrected(
   ctx.putImageData(outData, 0, 0);
 }
 
+function drawConfigOverlayFromVideo(
+  canvas: HTMLCanvasElement,
+  video: HTMLVideoElement,
+  corners: Corners,
+  dragging: number | null
+) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const cw = canvas.width;
+  const ch = canvas.height;
+  ctx.clearRect(0, 0, cw, ch);
+  ctx.drawImage(video, 0, 0, cw, ch);
+
+  ctx.beginPath();
+  corners.forEach((c, i) => {
+    const px = c.x * cw, py = c.y * ch;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  });
+  ctx.closePath();
+  ctx.strokeStyle = '#00ff00';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  const labels = ['TL', 'TR', 'BR', 'BL'];
+  corners.forEach((c, i) => {
+    const px = c.x * cw, py = c.y * ch;
+    ctx.beginPath();
+    ctx.arc(px, py, 8, 0, Math.PI * 2);
+    ctx.fillStyle = dragging === i ? '#ff0000' : '#00ff00';
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#000';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(labels[i], px, py + 3);
+  });
+}
+
 const Nevera = () => {
   const navigate = useNavigate();
   const { storageMethod } = useStorageMethod();
@@ -118,15 +160,17 @@ const Nevera = () => {
   const [configMode, setConfigMode] = useState(false);
   const [embedUrl, setEmbedUrl] = useState(DEFAULT_EMBED_URL);
   const [corners, setCorners] = useState<Corners>(DEFAULT_CORNERS);
-  const [refreshInterval, setRefreshInterval] = useState(10);
+  const [refreshInterval, setRefreshInterval] = useState(5);
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
+  const [streamReady, setStreamReady] = useState(false);
 
   const mainCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const configCanvasRef = useRef<HTMLCanvasElement>(null);
-  const imageRef = useRef<HTMLImageElement | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
+  const frameIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
   const cornersRef = useRef(corners);
   cornersRef.current = corners;
@@ -184,8 +228,10 @@ const Nevera = () => {
     toast.success('Configuración guardada');
   };
 
-  const fetchSnapshot = useCallback(async () => {
+  // Fetch m3u8 URL and start HLS playback
+  const startStream = useCallback(async () => {
     setLoading(true);
+    setStreamReady(false);
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -200,61 +246,123 @@ const Nevera = () => {
       });
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
 
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
+      if (!result.success || !result.m3u8Url) {
+        throw new Error(result.error || 'No HLS URL found');
+      }
 
-      const img = new Image();
-      img.onload = () => {
-        imageRef.current = img;
-        // Render to appropriate canvases
-        const main = mainCanvasRef.current;
-        if (main) {
-          const container = mainContainerRef.current;
-          if (container) {
-            const w = container.clientWidth;
-            const h = Math.min(w * 0.75, window.innerHeight - 120);
-            main.width = w;
-            main.height = h;
+      const video = videoRef.current;
+      if (!video) return;
+
+      // Destroy previous HLS instance
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          liveSyncDurationCount: 1,
+          liveMaxLatencyDurationCount: 3,
+        });
+        hls.loadSource(result.m3u8Url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          video.play().catch(() => {});
+          setStreamReady(true);
+          setLoading(false);
+        });
+        hls.on(Hls.Events.ERROR, (_event, data) => {
+          console.error('HLS error:', data);
+          if (data.fatal) {
+            setLoading(false);
+            // Try to recover or restart
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+              console.log('Attempting HLS recovery...');
+              hls.startLoad();
+            }
           }
-          renderCorrected(img, main, cornersRef.current);
-        }
-        const preview = previewCanvasRef.current;
-        if (preview) {
-          renderCorrected(img, preview, cornersRef.current);
-        }
-        const configCanvas = configCanvasRef.current;
-        if (configCanvas) {
-          drawConfigOverlay(configCanvas, img, cornersRef.current, null);
-        }
-        URL.revokeObjectURL(url);
-      };
-      img.src = url;
+        });
+        hlsRef.current = hls;
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Safari native HLS
+        video.src = result.m3u8Url;
+        video.addEventListener('loadedmetadata', () => {
+          video.play().catch(() => {});
+          setStreamReady(true);
+          setLoading(false);
+        }, { once: true });
+      }
     } catch (e) {
-      console.error('Error fetching snapshot:', e);
-    } finally {
+      console.error('Error starting stream:', e);
+      toast.error('Error al conectar con el stream');
       setLoading(false);
     }
   }, [embedUrl]);
 
-  // Auto-refresh for main view
+  // Start stream on mount
   useEffect(() => {
-    if (configMode) return;
-    fetchSnapshot();
-    intervalRef.current = setInterval(fetchSnapshot, refreshInterval * 1000);
+    startStream();
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
     };
-  }, [configMode, refreshInterval, fetchSnapshot]);
+  }, [startStream]);
+
+  // Capture frames periodically
+  useEffect(() => {
+    if (!streamReady) return;
+
+    const captureFrame = () => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2) return;
+
+      if (!configMode) {
+        const main = mainCanvasRef.current;
+        const container = mainContainerRef.current;
+        if (main && container) {
+          const w = container.clientWidth;
+          const h = Math.min(w * 0.75, window.innerHeight - 120);
+          main.width = w;
+          main.height = h;
+          renderCorrectedFromVideo(video, main, cornersRef.current);
+        }
+      } else {
+        const configCanvas = configCanvasRef.current;
+        if (configCanvas) {
+          drawConfigOverlayFromVideo(configCanvas, video, cornersRef.current, null);
+        }
+        const preview = previewCanvasRef.current;
+        if (preview) {
+          renderCorrectedFromVideo(video, preview, cornersRef.current);
+        }
+      }
+    };
+
+    // Capture immediately, then at interval
+    captureFrame();
+    frameIntervalRef.current = setInterval(captureFrame, refreshInterval * 1000);
+
+    return () => {
+      if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
+    };
+  }, [streamReady, configMode, refreshInterval]);
 
   // Redraw when corners change in config mode
   useEffect(() => {
-    if (!configMode || !imageRef.current) return;
+    if (!configMode || !streamReady) return;
+    const video = videoRef.current;
+    if (!video || video.readyState < 2) return;
     const configCanvas = configCanvasRef.current;
-    if (configCanvas) drawConfigOverlay(configCanvas, imageRef.current, corners, dragging);
+    if (configCanvas) drawConfigOverlayFromVideo(configCanvas, video, corners, dragging);
     const preview = previewCanvasRef.current;
-    if (preview) renderCorrected(imageRef.current, preview, corners);
-  }, [corners, configMode, dragging]);
+    if (preview) renderCorrectedFromVideo(video, preview, corners);
+  }, [corners, configMode, dragging, streamReady]);
 
   // Resize main canvas
   useEffect(() => {
@@ -267,7 +375,10 @@ const Nevera = () => {
       const h = Math.min(w * 0.75, window.innerHeight - 120);
       canvas.width = w;
       canvas.height = h;
-      if (imageRef.current) renderCorrected(imageRef.current, canvas, cornersRef.current);
+      const video = videoRef.current;
+      if (video && video.readyState >= 2) {
+        renderCorrectedFromVideo(video, canvas, cornersRef.current);
+      }
     };
     resize();
     window.addEventListener('resize', resize);
@@ -326,6 +437,16 @@ const Nevera = () => {
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
+        {/* Hidden video element for HLS playback */}
+        <video
+          ref={videoRef}
+          muted
+          playsInline
+          autoPlay
+          className="hidden"
+          crossOrigin="anonymous"
+        />
+
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
@@ -335,6 +456,15 @@ const Nevera = () => {
           </div>
           <div className="flex items-center gap-2">
             {loading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={startStream}
+              className="gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Reconectar
+            </Button>
             <Button
               variant={configMode ? "default" : "outline"}
               size="sm"
@@ -347,6 +477,16 @@ const Nevera = () => {
           </div>
         </div>
 
+        {!streamReady && !loading && (
+          <div className="text-center py-12 text-muted-foreground">
+            <p>No se pudo conectar al stream.</p>
+            <Button variant="outline" className="mt-4" onClick={startStream}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Reintentar
+            </Button>
+          </div>
+        )}
+
         {configMode ? (
           <div className="space-y-4">
             <div className="space-y-2">
@@ -355,8 +495,8 @@ const Nevera = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>Intervalo de refresco: {refreshInterval}s</Label>
-              <Slider value={[refreshInterval]} onValueChange={([v]) => setRefreshInterval(v)} min={3} max={60} step={1} />
+              <Label>Intervalo de captura: {refreshInterval}s</Label>
+              <Slider value={[refreshInterval]} onValueChange={([v]) => setRefreshInterval(v)} min={1} max={30} step={1} />
             </div>
 
             <p className="text-sm text-muted-foreground">
@@ -365,7 +505,7 @@ const Nevera = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
-                <p className="text-sm font-medium mb-1">Imagen original</p>
+                <p className="text-sm font-medium mb-1">Imagen original (en vivo)</p>
                 <canvas
                   ref={configCanvasRef}
                   width={640}
@@ -388,10 +528,6 @@ const Nevera = () => {
 
             <div className="flex flex-wrap gap-2">
               <Button onClick={saveConfig}>Guardar configuración</Button>
-              <Button variant="outline" onClick={fetchSnapshot}>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Actualizar imagen
-              </Button>
               <Button variant="outline" onClick={() => setCorners(DEFAULT_CORNERS)}>
                 Reiniciar esquinas
               </Button>
@@ -406,45 +542,5 @@ const Nevera = () => {
     </div>
   );
 };
-
-function drawConfigOverlay(
-  canvas: HTMLCanvasElement,
-  img: HTMLImageElement,
-  corners: Corners,
-  dragging: number | null
-) {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-  const cw = canvas.width;
-  const ch = canvas.height;
-  ctx.clearRect(0, 0, cw, ch);
-  ctx.drawImage(img, 0, 0, cw, ch);
-
-  ctx.beginPath();
-  corners.forEach((c, i) => {
-    const px = c.x * cw, py = c.y * ch;
-    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-  });
-  ctx.closePath();
-  ctx.strokeStyle = '#00ff00';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  const labels = ['TL', 'TR', 'BR', 'BL'];
-  corners.forEach((c, i) => {
-    const px = c.x * cw, py = c.y * ch;
-    ctx.beginPath();
-    ctx.arc(px, py, 8, 0, Math.PI * 2);
-    ctx.fillStyle = dragging === i ? '#ff0000' : '#00ff00';
-    ctx.fill();
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.fillStyle = '#000';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(labels[i], px, py + 3);
-  });
-}
 
 export default Nevera;
