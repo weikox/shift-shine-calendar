@@ -12,7 +12,7 @@ import { Slider } from "@/components/ui/slider";
 import Hls from "hls.js";
 
 type Corner = { x: number; y: number };
-type Corners = [Corner, Corner, Corner, Corner]; // TL, TR, BR, BL
+type Corners = [Corner, Corner, Corner, Corner];
 
 const DEFAULT_CORNERS: Corners = [
   { x: 0.05, y: 0.05 },
@@ -23,6 +23,10 @@ const DEFAULT_CORNERS: Corners = [
 
 const DEFAULT_EMBED_URL = "https://rtsp.me/embed/ZBbRS9ke/";
 
+const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/camera-snapshot`;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+// -- Perspective math --
 function solveProjection(src: Corners, dst: Corners): number[] {
   const A: number[][] = [];
   const b: number[] = [];
@@ -56,101 +60,133 @@ function solveProjection(src: Corners, dst: Corners): number[] {
 
 function applyPerspective(h: number[], x: number, y: number): [number, number] {
   const w = h[6] * x + h[7] * y + 1;
-  return [
-    (h[0] * x + h[1] * y + h[2]) / w,
-    (h[3] * x + h[4] * y + h[5]) / w,
-  ];
+  return [(h[0] * x + h[1] * y + h[2]) / w, (h[3] * x + h[4] * y + h[5]) / w];
 }
 
-function renderCorrectedFromVideo(
-  video: HTMLVideoElement,
-  canvas: HTMLCanvasElement,
-  corners: Corners
-) {
+function renderFromVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement, corners: Corners) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-
-  const outW = canvas.width;
-  const outH = canvas.height;
-  const imgW = video.videoWidth;
-  const imgH = video.videoHeight;
-
+  const outW = canvas.width, outH = canvas.height;
+  const imgW = video.videoWidth, imgH = video.videoHeight;
   if (!imgW || !imgH) return;
 
-  const srcPx: Corners = corners.map(c => ({ x: c.x * imgW, y: c.y * imgH })) as Corners;
-  const dstPx: Corners = [
-    { x: 0, y: 0 },
-    { x: outW, y: 0 },
-    { x: outW, y: outH },
-    { x: 0, y: outH },
-  ];
-
+  const srcPx = corners.map(c => ({ x: c.x * imgW, y: c.y * imgH })) as Corners;
+  const dstPx: Corners = [{ x: 0, y: 0 }, { x: outW, y: 0 }, { x: outW, y: outH }, { x: 0, y: outH }];
   const h = solveProjection(dstPx, srcPx);
 
-  const srcCanvas = document.createElement('canvas');
-  srcCanvas.width = imgW;
-  srcCanvas.height = imgH;
-  const srcCtx = srcCanvas.getContext('2d')!;
-  srcCtx.drawImage(video, 0, 0);
-  const srcData = srcCtx.getImageData(0, 0, imgW, imgH);
+  const tmp = document.createElement('canvas');
+  tmp.width = imgW; tmp.height = imgH;
+  tmp.getContext('2d')!.drawImage(video, 0, 0);
+  const src = tmp.getContext('2d')!.getImageData(0, 0, imgW, imgH);
+  const out = ctx.createImageData(outW, outH);
 
-  const outData = ctx.createImageData(outW, outH);
   for (let y = 0; y < outH; y++) {
     for (let x = 0; x < outW; x++) {
       const [sx, sy] = applyPerspective(h, x, y);
-      const si = Math.round(sx);
-      const sj = Math.round(sy);
-      const outIdx = (y * outW + x) * 4;
+      const si = Math.round(sx), sj = Math.round(sy);
+      const oi = (y * outW + x) * 4;
       if (si >= 0 && si < imgW && sj >= 0 && sj < imgH) {
-        const srcIdx = (sj * imgW + si) * 4;
-        outData.data[outIdx] = srcData.data[srcIdx];
-        outData.data[outIdx + 1] = srcData.data[srcIdx + 1];
-        outData.data[outIdx + 2] = srcData.data[srcIdx + 2];
-        outData.data[outIdx + 3] = 255;
+        const ii = (sj * imgW + si) * 4;
+        out.data[oi] = src.data[ii]; out.data[oi+1] = src.data[ii+1];
+        out.data[oi+2] = src.data[ii+2]; out.data[oi+3] = 255;
       }
     }
   }
-  ctx.putImageData(outData, 0, 0);
+  ctx.putImageData(out, 0, 0);
 }
 
-function drawConfigOverlayFromVideo(
-  canvas: HTMLCanvasElement,
-  video: HTMLVideoElement,
-  corners: Corners,
-  dragging: number | null
-) {
+function drawOverlay(canvas: HTMLCanvasElement, video: HTMLVideoElement, corners: Corners, dragging: number | null) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const cw = canvas.width;
-  const ch = canvas.height;
+  const cw = canvas.width, ch = canvas.height;
   ctx.clearRect(0, 0, cw, ch);
   ctx.drawImage(video, 0, 0, cw, ch);
 
   ctx.beginPath();
   corners.forEach((c, i) => {
     const px = c.x * cw, py = c.y * ch;
-    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
   });
   ctx.closePath();
-  ctx.strokeStyle = '#00ff00';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 2; ctx.stroke();
 
   const labels = ['TL', 'TR', 'BR', 'BL'];
   corners.forEach((c, i) => {
     const px = c.x * cw, py = c.y * ch;
-    ctx.beginPath();
-    ctx.arc(px, py, 8, 0, Math.PI * 2);
-    ctx.fillStyle = dragging === i ? '#ff0000' : '#00ff00';
-    ctx.fill();
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.fillStyle = '#000';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center';
+    ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2);
+    ctx.fillStyle = dragging === i ? '#ff0000' : '#00ff00'; ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#000'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(labels[i], px, py + 3);
   });
+}
+
+// Custom XHR loader that proxies all HLS requests through our edge function
+class ProxyLoader extends Hls.DefaultConfig.loader {
+  load(context: any, config: any, callbacks: any) {
+    // Rewrite the URL to go through our proxy
+    const originalUrl = context.url;
+    const proxyPayload = JSON.stringify({ proxyUrl: originalUrl });
+
+    // Use fetch-based approach for proxy
+    const xhr = new XMLHttpRequest();
+    const stats = this.stats;
+    stats.loading.start = performance.now();
+
+    xhr.open('POST', PROXY_URL, true);
+    xhr.responseType = context.responseType === 'arraybuffer' ? 'arraybuffer' : 'text';
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_KEY}`);
+    xhr.setRequestHeader('apikey', SUPABASE_KEY);
+
+    xhr.onload = () => {
+      stats.loading.first = Math.max(performance.now(), stats.loading.start);
+      stats.loading.end = Math.max(performance.now(), stats.loading.first);
+      stats.loaded = xhr.response?.byteLength || xhr.response?.length || 0;
+      stats.total = stats.loaded;
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        // For m3u8 playlists, we need to rewrite segment URLs to absolute
+        let response = xhr.response;
+        if (typeof response === 'string' && response.includes('#EXTINF')) {
+          const base = originalUrl.substring(0, originalUrl.lastIndexOf('/') + 1);
+          response = response.replace(/^(?!#)(?!https?:\/\/)(.+\.ts.*)$/gm, base + '$1');
+        }
+
+        callbacks.onSuccess({
+          url: originalUrl,
+          data: response,
+          code: xhr.status,
+          text: xhr.statusText,
+        }, stats, context, xhr);
+      } else {
+        callbacks.onError({ code: xhr.status, text: xhr.statusText }, context, xhr, stats);
+      }
+    };
+
+    xhr.onerror = () => {
+      callbacks.onError({ code: xhr.status, text: 'Network error' }, context, xhr, stats);
+    };
+
+    xhr.ontimeout = () => {
+      callbacks.onTimeout(stats, context, xhr);
+    };
+
+    xhr.timeout = config.timeout;
+    xhr.send(proxyPayload);
+
+    this.loader = xhr;
+  }
+
+  abort() {
+    if (this.loader && this.loader.readyState !== 4) {
+      this.loader.abort();
+    }
+  }
+
+  destroy() {
+    this.abort();
+  }
 }
 
 const Nevera = () => {
@@ -187,24 +223,18 @@ const Nevera = () => {
           if (parsed.refreshInterval) setRefreshInterval(parsed.refreshInterval);
         } catch {}
       }
-
       if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
         try {
           const { data } = await supabase
-            .from('notes')
-            .select('content')
-            .eq('user_id', user.id)
-            .eq('type', 'nevera-config')
-            .maybeSingle();
+            .from('notes').select('content')
+            .eq('user_id', user.id).eq('type', 'nevera-config').maybeSingle();
           if (data?.content) {
             const parsed = JSON.parse(data.content);
             if (parsed.corners) setCorners(parsed.corners);
             if (parsed.embedUrl) setEmbedUrl(parsed.embedUrl);
             if (parsed.refreshInterval) setRefreshInterval(parsed.refreshInterval);
           }
-        } catch (e) {
-          console.error('Error loading config:', e);
-        }
+        } catch (e) { console.error('Error loading config:', e); }
       }
     };
     loadConfig();
@@ -213,53 +243,38 @@ const Nevera = () => {
   const saveConfig = async () => {
     const config = JSON.stringify({ corners, embedUrl, refreshInterval });
     localStorage.setItem('nevera-config', config);
-
     if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
       try {
         await supabase.from('notes').upsert({
-          user_id: user.id,
-          type: 'nevera-config',
-          content: config,
+          user_id: user.id, type: 'nevera-config', content: config,
         }, { onConflict: 'user_id,type' });
-      } catch (e) {
-        console.error('Error saving config:', e);
-      }
+      } catch (e) { console.error('Error saving config:', e); }
     }
     toast.success('Configuración guardada');
   };
 
-  // Fetch m3u8 URL and start HLS playback
   const startStream = useCallback(async () => {
     setLoading(true);
     setStreamReady(false);
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const response = await fetch(`${supabaseUrl}/functions/v1/camera-snapshot`, {
+      // Step 1: Get m3u8 URL via edge function
+      const response = await fetch(PROXY_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseKey}`,
-          'apikey': supabaseKey,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'apikey': SUPABASE_KEY,
         },
         body: JSON.stringify({ embedUrl }),
       });
-
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result = await response.json();
-
-      if (!result.success || !result.m3u8Url) {
-        throw new Error(result.error || 'No HLS URL found');
-      }
+      if (!result.success || !result.m3u8Url) throw new Error(result.error || 'No HLS URL');
 
       const video = videoRef.current;
       if (!video) return;
 
-      // Destroy previous HLS instance
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
+      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
       if (Hls.isSupported()) {
         const hls = new Hls({
@@ -267,6 +282,7 @@ const Nevera = () => {
           lowLatencyMode: true,
           liveSyncDurationCount: 1,
           liveMaxLatencyDurationCount: 3,
+          loader: ProxyLoader as any,
         });
         hls.loadSource(result.m3u8Url);
         hls.attachMedia(video);
@@ -276,19 +292,19 @@ const Nevera = () => {
           setLoading(false);
         });
         hls.on(Hls.Events.ERROR, (_event, data) => {
-          console.error('HLS error:', data);
+          console.warn('HLS error:', data.type, data.details, data.fatal);
           if (data.fatal) {
             setLoading(false);
-            // Try to recover or restart
             if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-              console.log('Attempting HLS recovery...');
               hls.startLoad();
+            } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+              hls.recoverMediaError();
             }
           }
         });
         hlsRef.current = hls;
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Safari native HLS
+        // Safari - can't proxy easily, try direct
         video.src = result.m3u8Url;
         video.addEventListener('loadedmetadata', () => {
           video.play().catch(() => {});
@@ -303,68 +319,48 @@ const Nevera = () => {
     }
   }, [embedUrl]);
 
-  // Start stream on mount
   useEffect(() => {
     startStream();
-    return () => {
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-    };
+    return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
   }, [startStream]);
 
   // Capture frames periodically
   useEffect(() => {
     if (!streamReady) return;
-
-    const captureFrame = () => {
+    const capture = () => {
       const video = videoRef.current;
       if (!video || video.readyState < 2) return;
-
       if (!configMode) {
         const main = mainCanvasRef.current;
         const container = mainContainerRef.current;
         if (main && container) {
           const w = container.clientWidth;
           const h = Math.min(w * 0.75, window.innerHeight - 120);
-          main.width = w;
-          main.height = h;
-          renderCorrectedFromVideo(video, main, cornersRef.current);
+          main.width = w; main.height = h;
+          renderFromVideo(video, main, cornersRef.current);
         }
       } else {
-        const configCanvas = configCanvasRef.current;
-        if (configCanvas) {
-          drawConfigOverlayFromVideo(configCanvas, video, cornersRef.current, null);
-        }
-        const preview = previewCanvasRef.current;
-        if (preview) {
-          renderCorrectedFromVideo(video, preview, cornersRef.current);
-        }
+        const cc = configCanvasRef.current;
+        if (cc) drawOverlay(cc, video, cornersRef.current, null);
+        const pc = previewCanvasRef.current;
+        if (pc) renderFromVideo(video, pc, cornersRef.current);
       }
     };
-
-    // Capture immediately, then at interval
-    captureFrame();
-    frameIntervalRef.current = setInterval(captureFrame, refreshInterval * 1000);
-
-    return () => {
-      if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
-    };
+    capture();
+    frameIntervalRef.current = setInterval(capture, refreshInterval * 1000);
+    return () => { if (frameIntervalRef.current) clearInterval(frameIntervalRef.current); };
   }, [streamReady, configMode, refreshInterval]);
 
-  // Redraw when corners change in config mode
   useEffect(() => {
     if (!configMode || !streamReady) return;
     const video = videoRef.current;
     if (!video || video.readyState < 2) return;
-    const configCanvas = configCanvasRef.current;
-    if (configCanvas) drawConfigOverlayFromVideo(configCanvas, video, corners, dragging);
-    const preview = previewCanvasRef.current;
-    if (preview) renderCorrectedFromVideo(video, preview, corners);
+    const cc = configCanvasRef.current;
+    if (cc) drawOverlay(cc, video, corners, dragging);
+    const pc = previewCanvasRef.current;
+    if (pc) renderFromVideo(video, pc, corners);
   }, [corners, configMode, dragging, streamReady]);
 
-  // Resize main canvas
   useEffect(() => {
     if (configMode) return;
     const resize = () => {
@@ -373,12 +369,9 @@ const Nevera = () => {
       if (!canvas || !container) return;
       const w = container.clientWidth;
       const h = Math.min(w * 0.75, window.innerHeight - 120);
-      canvas.width = w;
-      canvas.height = h;
+      canvas.width = w; canvas.height = h;
       const video = videoRef.current;
-      if (video && video.readyState >= 2) {
-        renderCorrectedFromVideo(video, canvas, cornersRef.current);
-      }
+      if (video && video.readyState >= 2) renderFromVideo(video, canvas, cornersRef.current);
     };
     resize();
     window.addEventListener('resize', resize);
@@ -389,16 +382,13 @@ const Nevera = () => {
     const rect = e.currentTarget.getBoundingClientRect();
     return { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
   };
-
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const pos = getCanvasPos(e);
     for (let i = 0; i < 4; i++) {
-      const dx = pos.x - corners[i].x;
-      const dy = pos.y - corners[i].y;
+      const dx = pos.x - corners[i].x, dy = pos.y - corners[i].y;
       if (Math.sqrt(dx * dx + dy * dy) < 0.04) { setDragging(i); return; }
     }
   };
-
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (dragging === null) return;
     const pos = getCanvasPos(e);
@@ -406,25 +396,20 @@ const Nevera = () => {
     nc[dragging] = { x: Math.max(0, Math.min(1, pos.x)), y: Math.max(0, Math.min(1, pos.y)) };
     setCorners(nc);
   };
-
   const handleMouseUp = () => setDragging(null);
-
   const getTouchPos = (e: React.TouchEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const t = e.touches[0];
     return { x: (t.clientX - rect.left) / rect.width, y: (t.clientY - rect.top) / rect.height };
   };
-
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const pos = getTouchPos(e);
     for (let i = 0; i < 4; i++) {
-      const dx = pos.x - corners[i].x;
-      const dy = pos.y - corners[i].y;
+      const dx = pos.x - corners[i].x, dy = pos.y - corners[i].y;
       if (Math.sqrt(dx * dx + dy * dy) < 0.06) { setDragging(i); return; }
     }
   };
-
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     if (dragging === null) return;
@@ -437,16 +422,7 @@ const Nevera = () => {
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Hidden video element for HLS playback */}
-        <video
-          ref={videoRef}
-          muted
-          playsInline
-          autoPlay
-          className="hidden"
-          crossOrigin="anonymous"
-        />
-
+        <video ref={videoRef} muted playsInline autoPlay className="hidden" crossOrigin="anonymous" />
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
@@ -456,20 +432,12 @@ const Nevera = () => {
           </div>
           <div className="flex items-center gap-2">
             {loading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={startStream}
-              className="gap-2"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Reconectar
+            <Button variant="outline" size="sm" onClick={startStream} className="gap-2">
+              <RefreshCw className="h-4 w-4" /> Reconectar
             </Button>
             <Button
-              variant={configMode ? "default" : "outline"}
-              size="sm"
-              onClick={() => setConfigMode(!configMode)}
-              className="gap-2"
+              variant={configMode ? "default" : "outline"} size="sm"
+              onClick={() => setConfigMode(!configMode)} className="gap-2"
             >
               {configMode ? <Eye className="h-4 w-4" /> : <Settings className="h-4 w-4" />}
               {configMode ? 'Ver' : 'Configurar'}
@@ -481,8 +449,7 @@ const Nevera = () => {
           <div className="text-center py-12 text-muted-foreground">
             <p>No se pudo conectar al stream.</p>
             <Button variant="outline" className="mt-4" onClick={startStream}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Reintentar
+              <RefreshCw className="h-4 w-4 mr-2" /> Reintentar
             </Button>
           </div>
         )}
@@ -493,44 +460,29 @@ const Nevera = () => {
               <Label>URL del stream (embed)</Label>
               <Input value={embedUrl} onChange={(e) => setEmbedUrl(e.target.value)} placeholder="https://rtsp.me/embed/..." />
             </div>
-
             <div className="space-y-2">
               <Label>Intervalo de captura: {refreshInterval}s</Label>
               <Slider value={[refreshInterval]} onValueChange={([v]) => setRefreshInterval(v)} min={1} max={30} step={1} />
             </div>
-
-            <p className="text-sm text-muted-foreground">
-              Arrastra las esquinas verdes para ajustar el recorte de la pizarra:
-            </p>
-
+            <p className="text-sm text-muted-foreground">Arrastra las esquinas verdes para ajustar el recorte:</p>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm font-medium mb-1">Imagen original (en vivo)</p>
-                <canvas
-                  ref={configCanvasRef}
-                  width={640}
-                  height={480}
+                <canvas ref={configCanvasRef} width={640} height={480}
                   className="w-full border rounded-lg cursor-crosshair touch-none"
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
-                  onMouseLeave={handleMouseUp}
-                  onTouchStart={handleTouchStart}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={() => setDragging(null)}
-                />
+                  onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
+                  onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}
+                  onTouchEnd={() => setDragging(null)} />
               </div>
               <div>
                 <p className="text-sm font-medium mb-1">Vista corregida</p>
                 <canvas ref={previewCanvasRef} width={640} height={480} className="w-full border rounded-lg" />
               </div>
             </div>
-
             <div className="flex flex-wrap gap-2">
               <Button onClick={saveConfig}>Guardar configuración</Button>
-              <Button variant="outline" onClick={() => setCorners(DEFAULT_CORNERS)}>
-                Reiniciar esquinas
-              </Button>
+              <Button variant="outline" onClick={() => setCorners(DEFAULT_CORNERS)}>Reiniciar esquinas</Button>
             </div>
           </div>
         ) : (
