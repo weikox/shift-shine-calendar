@@ -9,59 +9,80 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
-    const { embedUrl, proxyUrl } = body;
+    const { embedUrl } = await req.json();
 
-    // Mode 1: Proxy a URL (for HLS segments/playlists)
-    if (proxyUrl) {
-      const response = await fetch(proxyUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-      });
-
-      if (!response.ok) {
-        return new Response(
-          JSON.stringify({ success: false, error: `Proxy fetch failed: ${response.status}` }),
-          { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      const contentType = response.headers.get('content-type') || 'application/octet-stream';
-      const data = await response.arrayBuffer();
-
-      return new Response(data, {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': contentType,
-          'Cache-Control': 'no-cache, no-store',
-        },
-      });
-    }
-
-    // Mode 2: Resolve embed URL to m3u8 URL
-    if (embedUrl) {
-      const embedResponse = await fetch(embedUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-      });
-      const html = await embedResponse.text();
-
-      const m3u8Match = html.match(/https:\/\/[^"']+\.m3u8[^"']*/);
-      if (!m3u8Match) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'Could not find HLS stream URL' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
+    if (!embedUrl) {
       return new Response(
-        JSON.stringify({ success: true, m3u8Url: m3u8Match[0] }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store' } }
+        JSON.stringify({ success: false, error: 'embedUrl is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    return new Response(
-      JSON.stringify({ success: false, error: 'embedUrl or proxyUrl is required' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    const ua = { 'User-Agent': 'Mozilla/5.0' };
+
+    // Step 1: Fetch embed page to get m3u8 URL
+    const embedResponse = await fetch(embedUrl, { headers: ua });
+    const html = await embedResponse.text();
+
+    const m3u8Match = html.match(/https:\/\/[^"']+\.m3u8[^"']*/);
+    if (!m3u8Match) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Could not find HLS stream URL' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const m3u8Url = m3u8Match[0];
+    const baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
+
+    // Step 2: Fetch the m3u8 playlist (same IP)
+    const playlistResponse = await fetch(m3u8Url, { headers: ua });
+    if (!playlistResponse.ok) {
+      return new Response(
+        JSON.stringify({ success: false, error: `Playlist fetch failed: ${playlistResponse.status}` }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const playlist = await playlistResponse.text();
+
+    // Step 3: Find the latest .ts segment
+    const lines = playlist.split('\n');
+    let lastSegment = '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        lastSegment = trimmed;
+      }
+    }
+
+    if (!lastSegment) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'No segments found in playlist' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const segmentUrl = lastSegment.startsWith('http') ? lastSegment : baseUrl + lastSegment;
+
+    // Step 4: Fetch the TS segment (same IP)
+    const segmentResponse = await fetch(segmentUrl, { headers: ua });
+    if (!segmentResponse.ok) {
+      return new Response(
+        JSON.stringify({ success: false, error: `Segment fetch failed: ${segmentResponse.status}` }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const segmentData = await segmentResponse.arrayBuffer();
+
+    return new Response(segmentData, {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'video/mp2t',
+        'Cache-Control': 'no-cache, no-store',
+      },
+    });
   } catch (error) {
     console.error('Error:', error);
     return new Response(
