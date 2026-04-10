@@ -18,10 +18,10 @@ Deno.serve(async (req) => {
       );
     }
 
+    const ua = { 'User-Agent': 'Mozilla/5.0' };
+
     // Fetch the embed page to extract poster URL
-    const embedResponse = await fetch(embedUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
+    const embedResponse = await fetch(embedUrl, { headers: ua });
     const html = await embedResponse.text();
 
     // Extract poster URL from the video tag
@@ -33,10 +33,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    const posterUrl = posterMatch[1];
+    // Add cache-busting to poster URL
+    const posterUrl = posterMatch[1] + (posterMatch[1].includes('?') ? '&' : '?') + '_t=' + Date.now();
 
     // Fetch the poster image
-    const imageResponse = await fetch(posterUrl);
+    const imageResponse = await fetch(posterUrl, {
+      headers: { ...ua, 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
+    });
     if (!imageResponse.ok) {
       return new Response(
         JSON.stringify({ success: false, error: 'Failed to fetch poster image' }),
