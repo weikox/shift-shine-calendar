@@ -20,66 +20,40 @@ Deno.serve(async (req) => {
 
     const ua = { 'User-Agent': 'Mozilla/5.0' };
 
-    // Step 1: Fetch embed page to get m3u8 URL
+    // Fetch the embed page to extract poster URL
     const embedResponse = await fetch(embedUrl, { headers: ua });
     const html = await embedResponse.text();
 
-    const m3u8Match = html.match(/https:\/\/[^"']+\.m3u8[^"']*/);
-    if (!m3u8Match) {
+    // Extract poster URL from the video tag
+    const posterMatch = html.match(/poster="([^"]+)"/);
+    if (!posterMatch) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Could not find HLS stream URL' }),
+        JSON.stringify({ success: false, error: 'Could not find poster image' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const m3u8Url = m3u8Match[0];
-    const baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
+    // Add cache-busting to poster URL
+    const posterUrl = posterMatch[1] + (posterMatch[1].includes('?') ? '&' : '?') + '_t=' + Date.now();
 
-    // Step 2: Fetch the m3u8 playlist (same IP)
-    const playlistResponse = await fetch(m3u8Url, { headers: ua });
-    if (!playlistResponse.ok) {
+    // Fetch the poster image
+    const imageResponse = await fetch(posterUrl, {
+      headers: { ...ua, 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
+    });
+    if (!imageResponse.ok) {
       return new Response(
-        JSON.stringify({ success: false, error: `Playlist fetch failed: ${playlistResponse.status}` }),
+        JSON.stringify({ success: false, error: 'Failed to fetch poster image' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const playlist = await playlistResponse.text();
+    const imageBuffer = await imageResponse.arrayBuffer();
+    const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
 
-    // Step 3: Find the latest .ts segment
-    const lines = playlist.split('\n');
-    let lastSegment = '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith('#')) {
-        lastSegment = trimmed;
-      }
-    }
-
-    if (!lastSegment) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'No segments found in playlist' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const segmentUrl = lastSegment.startsWith('http') ? lastSegment : baseUrl + lastSegment;
-
-    // Step 4: Fetch the TS segment (same IP)
-    const segmentResponse = await fetch(segmentUrl, { headers: ua });
-    if (!segmentResponse.ok) {
-      return new Response(
-        JSON.stringify({ success: false, error: `Segment fetch failed: ${segmentResponse.status}` }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const segmentData = await segmentResponse.arrayBuffer();
-
-    return new Response(segmentData, {
+    return new Response(imageBuffer, {
       headers: {
         ...corsHeaders,
-        'Content-Type': 'video/mp2t',
+        'Content-Type': contentType,
         'Cache-Control': 'no-cache, no-store',
       },
     });
