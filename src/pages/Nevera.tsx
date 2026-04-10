@@ -187,13 +187,21 @@ const Nevera = () => {
   const fetchSnapshot = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('camera-snapshot', {
-        body: { embedUrl },
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const response = await fetch(`${supabaseUrl}/functions/v1/camera-snapshot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey,
+        },
+        body: JSON.stringify({ embedUrl }),
       });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-      const blob = data instanceof Blob ? data : new Blob([data], { type: 'image/jpeg' });
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
 
       const img = new Image();
