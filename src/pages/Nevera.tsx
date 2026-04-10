@@ -121,59 +121,61 @@ function drawOverlay(canvas: HTMLCanvasElement, video: HTMLVideoElement, corners
   });
 }
 
-// Custom XHR loader that proxies all HLS requests through our edge function
-class ProxyLoader extends Hls.DefaultConfig.loader {
-  private _xhr: XMLHttpRequest | null = null;
+// Custom loader that proxies all HLS requests through our edge function
+function createProxyLoader() {
+  return class ProxyLoader {
+    stats: any;
+    private _xhr: XMLHttpRequest | null = null;
 
-  load(context: any, config: any, callbacks: any) {
-    const originalUrl = context.url;
-    const proxyPayload = JSON.stringify({ proxyUrl: originalUrl });
+    constructor() {
+      this.stats = {
+        aborted: false, loaded: 0, retry: 0, total: 0, chunkCount: 0, bwEstimate: 0,
+        loading: { start: 0, first: 0, end: 0 },
+        parsing: { start: 0, end: 0 },
+        buffering: { start: 0, first: 0, end: 0 },
+      };
+    }
 
-    const xhr = new XMLHttpRequest();
-    const stats = this.stats;
-    stats.loading.start = performance.now();
+    load(context: any, config: any, callbacks: any) {
+      const originalUrl = context.url;
+      const xhr = new XMLHttpRequest();
+      this._xhr = xhr;
+      this.stats.loading.start = performance.now();
 
-    xhr.open('POST', PROXY_URL, true);
-    xhr.responseType = context.responseType === 'arraybuffer' ? 'arraybuffer' : 'text';
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_KEY}`);
-    xhr.setRequestHeader('apikey', SUPABASE_KEY);
+      xhr.open('POST', PROXY_URL, true);
+      xhr.responseType = context.responseType === 'arraybuffer' ? 'arraybuffer' : 'text';
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_KEY}`);
+      xhr.setRequestHeader('apikey', SUPABASE_KEY);
 
-    xhr.onload = () => {
-      stats.loading.first = Math.max(performance.now(), stats.loading.start);
-      stats.loading.end = Math.max(performance.now(), stats.loading.first);
-      stats.loaded = xhr.response?.byteLength || xhr.response?.length || 0;
-      stats.total = stats.loaded;
+      xhr.onload = () => {
+        this.stats.loading.first = Math.max(performance.now(), this.stats.loading.start);
+        this.stats.loading.end = Math.max(performance.now(), this.stats.loading.first);
+        this.stats.loaded = xhr.response?.byteLength || xhr.response?.length || 0;
+        this.stats.total = this.stats.loaded;
 
-      if (xhr.status >= 200 && xhr.status < 300) {
-        let response = xhr.response;
-        if (typeof response === 'string' && response.includes('#EXTINF')) {
-          const base = originalUrl.substring(0, originalUrl.lastIndexOf('/') + 1);
-          response = response.replace(/^(?!#)(?!https?:\/\/)(.+\.ts.*)$/gm, base + '$1');
+        if (xhr.status >= 200 && xhr.status < 300) {
+          let response = xhr.response;
+          if (typeof response === 'string' && response.includes('#EXTINF')) {
+            const base = originalUrl.substring(0, originalUrl.lastIndexOf('/') + 1);
+            response = response.replace(/^(?!#)(?!https?:\/\/)(.+\.ts.*)$/gm, base + '$1');
+          }
+          callbacks.onSuccess({
+            url: originalUrl, data: response, code: xhr.status, text: xhr.statusText,
+          }, this.stats, context, xhr);
+        } else {
+          callbacks.onError({ code: xhr.status, text: xhr.statusText }, context, xhr, this.stats);
         }
-        callbacks.onSuccess({
-          url: originalUrl, data: response, code: xhr.status, text: xhr.statusText,
-        }, stats, context, xhr);
-      } else {
-        callbacks.onError({ code: xhr.status, text: xhr.statusText }, context, xhr, stats);
-      }
-    };
-    xhr.onerror = () => { callbacks.onError({ code: xhr.status, text: 'Network error' }, context, xhr, stats); };
-    xhr.ontimeout = () => { callbacks.onTimeout(stats, context, xhr); };
+      };
+      xhr.onerror = () => { callbacks.onError({ code: xhr.status, text: 'Network error' }, context, xhr, this.stats); };
+      xhr.ontimeout = () => { callbacks.onTimeout(this.stats, context, xhr); };
+      xhr.timeout = config.timeout || 20000;
+      xhr.send(JSON.stringify({ proxyUrl: originalUrl }));
+    }
 
-    xhr.timeout = config.timeout;
-    xhr.send(proxyPayload);
-    this._xhr = xhr;
-  }
-
-  abort() {
-    if (this._xhr && this._xhr.readyState !== 4) this._xhr.abort();
-  }
-
-  destroy() {
-    this.abort();
-    this._xhr = null;
-  }
+    abort() { if (this._xhr && this._xhr.readyState !== 4) this._xhr.abort(); }
+    destroy() { this.abort(); this._xhr = null; }
+  };
 }
 
 const Nevera = () => {
