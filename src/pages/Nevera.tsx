@@ -9,7 +9,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import Hls from "hls.js";
 
 type Corner = { x: number; y: number };
 type Corners = [Corner, Corner, Corner, Corner];
@@ -22,9 +21,6 @@ const DEFAULT_CORNERS: Corners = [
 ];
 
 const DEFAULT_EMBED_URL = "https://rtsp.me/embed/ZBbRS9ke/";
-
-const PROXY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/camera-snapshot`;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 // -- Perspective math --
 function solveProjection(src: Corners, dst: Corners): number[] {
@@ -63,11 +59,16 @@ function applyPerspective(h: number[], x: number, y: number): [number, number] {
   return [(h[0] * x + h[1] * y + h[2]) / w, (h[3] * x + h[4] * y + h[5]) / w];
 }
 
-function renderFromVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement, corners: Corners) {
+function renderFromSource(
+  source: HTMLVideoElement | HTMLImageElement,
+  canvas: HTMLCanvasElement,
+  corners: Corners
+) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const outW = canvas.width, outH = canvas.height;
-  const imgW = video.videoWidth, imgH = video.videoHeight;
+  const imgW = source instanceof HTMLVideoElement ? source.videoWidth : source.naturalWidth;
+  const imgH = source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight;
   if (!imgW || !imgH) return;
 
   const srcPx = corners.map(c => ({ x: c.x * imgW, y: c.y * imgH })) as Corners;
@@ -76,7 +77,7 @@ function renderFromVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement, cor
 
   const tmp = document.createElement('canvas');
   tmp.width = imgW; tmp.height = imgH;
-  tmp.getContext('2d')!.drawImage(video, 0, 0);
+  tmp.getContext('2d')!.drawImage(source, 0, 0);
   const src = tmp.getContext('2d')!.getImageData(0, 0, imgW, imgH);
   const out = ctx.createImageData(outW, outH);
 
@@ -95,12 +96,17 @@ function renderFromVideo(video: HTMLVideoElement, canvas: HTMLCanvasElement, cor
   ctx.putImageData(out, 0, 0);
 }
 
-function drawOverlay(canvas: HTMLCanvasElement, video: HTMLVideoElement, corners: Corners, dragging: number | null) {
+function drawOverlay(
+  canvas: HTMLCanvasElement,
+  source: HTMLVideoElement | HTMLImageElement,
+  corners: Corners,
+  dragging: number | null
+) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const cw = canvas.width, ch = canvas.height;
   ctx.clearRect(0, 0, cw, ch);
-  ctx.drawImage(video, 0, 0, cw, ch);
+  ctx.drawImage(source, 0, 0, cw, ch);
 
   ctx.beginPath();
   corners.forEach((c, i) => {
@@ -121,61 +127,59 @@ function drawOverlay(canvas: HTMLCanvasElement, video: HTMLVideoElement, corners
   });
 }
 
-// Custom loader that proxies all HLS requests through our edge function
-function createProxyLoader() {
-  return class ProxyLoader {
-    stats: any;
-    private _xhr: XMLHttpRequest | null = null;
+/**
+ * Decodes a TS segment into a video frame by appending it to a MediaSource.
+ * Returns a promise that resolves with the video element once a frame is ready.
+ */
+async function decodeSegmentToFrame(tsData: ArrayBuffer): Promise<HTMLVideoElement> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.autoplay = true;
 
-    constructor() {
-      this.stats = {
-        aborted: false, loaded: 0, retry: 0, total: 0, chunkCount: 0, bwEstimate: 0,
-        loading: { start: 0, first: 0, end: 0 },
-        parsing: { start: 0, end: 0 },
-        buffering: { start: 0, first: 0, end: 0 },
-      };
-    }
+    const mediaSource = new MediaSource();
+    video.src = URL.createObjectURL(mediaSource);
 
-    load(context: any, config: any, callbacks: any) {
-      const originalUrl = context.url;
-      const xhr = new XMLHttpRequest();
-      this._xhr = xhr;
-      this.stats.loading.start = performance.now();
-
-      xhr.open('POST', PROXY_URL, true);
-      xhr.responseType = context.responseType === 'arraybuffer' ? 'arraybuffer' : 'text';
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_KEY}`);
-      xhr.setRequestHeader('apikey', SUPABASE_KEY);
-
-      xhr.onload = () => {
-        this.stats.loading.first = Math.max(performance.now(), this.stats.loading.start);
-        this.stats.loading.end = Math.max(performance.now(), this.stats.loading.first);
-        this.stats.loaded = xhr.response?.byteLength || xhr.response?.length || 0;
-        this.stats.total = this.stats.loaded;
-
-        if (xhr.status >= 200 && xhr.status < 300) {
-          let response = xhr.response;
-          if (typeof response === 'string' && response.includes('#EXTINF')) {
-            const base = originalUrl.substring(0, originalUrl.lastIndexOf('/') + 1);
-            response = response.replace(/^(?!#)(?!https?:\/\/)(.+\.ts.*)$/gm, base + '$1');
-          }
-          callbacks.onSuccess({
-            url: originalUrl, data: response, code: xhr.status, text: xhr.statusText,
-          }, this.stats, context, xhr);
-        } else {
-          callbacks.onError({ code: xhr.status, text: xhr.statusText }, context, xhr, this.stats);
+    mediaSource.addEventListener('sourceopen', () => {
+      try {
+        // Try H.264 first, then H.265
+        let mimeType = 'video/mp2t; codecs="avc1.42E01E"';
+        if (!MediaSource.isTypeSupported(mimeType)) {
+          mimeType = 'video/mp2t; codecs="avc1.640029"';
         }
-      };
-      xhr.onerror = () => { callbacks.onError({ code: xhr.status, text: 'Network error' }, context, xhr, this.stats); };
-      xhr.ontimeout = () => { callbacks.onTimeout(this.stats, context, xhr); };
-      xhr.timeout = config.timeout || 20000;
-      xhr.send(JSON.stringify({ proxyUrl: originalUrl }));
-    }
+        if (!MediaSource.isTypeSupported(mimeType)) {
+          mimeType = 'video/mp2t';
+        }
+        
+        const sourceBuffer = mediaSource.addSourceBuffer(mimeType);
+        sourceBuffer.appendBuffer(tsData);
+        
+        sourceBuffer.addEventListener('updateend', () => {
+          try {
+            if (mediaSource.readyState === 'open') {
+              mediaSource.endOfStream();
+            }
+          } catch {}
+        });
 
-    abort() { if (this._xhr && this._xhr.readyState !== 4) this._xhr.abort(); }
-    destroy() { this.abort(); this._xhr = null; }
-  };
+        video.addEventListener('loadeddata', () => {
+          video.currentTime = 0;
+          video.addEventListener('seeked', () => resolve(video), { once: true });
+        }, { once: true });
+
+        // Fallback timeout
+        setTimeout(() => {
+          if (video.readyState >= 2) resolve(video);
+          else reject(new Error('Decode timeout'));
+        }, 5000);
+      } catch (e) {
+        reject(e);
+      }
+    });
+
+    mediaSource.addEventListener('error', () => reject(new Error('MediaSource error')));
+  });
 }
 
 const Nevera = () => {
@@ -185,17 +189,15 @@ const Nevera = () => {
   const [configMode, setConfigMode] = useState(false);
   const [embedUrl, setEmbedUrl] = useState(DEFAULT_EMBED_URL);
   const [corners, setCorners] = useState<Corners>(DEFAULT_CORNERS);
-  const [refreshInterval, setRefreshInterval] = useState(5);
+  const [refreshInterval, setRefreshInterval] = useState(10);
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
-  const [streamReady, setStreamReady] = useState(false);
 
   const mainCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const configCanvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef = useRef<Hls | null>(null);
-  const frameIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastSourceRef = useRef<HTMLVideoElement | HTMLImageElement | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mainContainerRef = useRef<HTMLDivElement>(null);
   const cornersRef = useRef(corners);
   cornersRef.current = corners;
@@ -242,114 +244,92 @@ const Nevera = () => {
     toast.success('Configuración guardada');
   };
 
-  const startStream = useCallback(async () => {
+  const fetchSnapshot = useCallback(async () => {
     setLoading(true);
-    setStreamReady(false);
     try {
-      // Step 1: Get m3u8 URL via edge function
-      const response = await fetch(PROXY_URL, {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const response = await fetch(`${supabaseUrl}/functions/v1/camera-snapshot`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey,
         },
         body: JSON.stringify({ embedUrl }),
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const result = await response.json();
-      if (!result.success || !result.m3u8Url) throw new Error(result.error || 'No HLS URL');
 
-      const video = videoRef.current;
-      if (!video) return;
-
-      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
-
-      if (Hls.isSupported()) {
-        const hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          liveSyncDurationCount: 1,
-          liveMaxLatencyDurationCount: 3,
-          loader: createProxyLoader() as any,
-        });
-        hls.loadSource(result.m3u8Url);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(() => {});
-          setStreamReady(true);
-          setLoading(false);
-        });
-        hls.on(Hls.Events.ERROR, (_event, data) => {
-          console.warn('HLS error:', data.type, data.details, data.fatal);
-          if (data.fatal) {
-            setLoading(false);
-            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-              hls.startLoad();
-            } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-              hls.recoverMediaError();
-            }
-          }
-        });
-        hlsRef.current = hls;
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Safari - can't proxy easily, try direct
-        video.src = result.m3u8Url;
-        video.addEventListener('loadedmetadata', () => {
-          video.play().catch(() => {});
-          setStreamReady(true);
-          setLoading(false);
-        }, { once: true });
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errText}`);
       }
+
+      const contentType = response.headers.get('content-type') || '';
+      const data = await response.arrayBuffer();
+
+      let source: HTMLVideoElement | HTMLImageElement;
+
+      if (contentType.includes('video/mp2t')) {
+        // Decode TS segment
+        try {
+          source = await decodeSegmentToFrame(data);
+        } catch (decodeErr) {
+          console.warn('MediaSource decode failed, trying as image fallback');
+          throw decodeErr;
+        }
+      } else {
+        // Fallback: treat as image (JPEG)
+        source = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image();
+          const blob = new Blob([data], { type: contentType || 'image/jpeg' });
+          const url = URL.createObjectURL(blob);
+          img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+          img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+          img.src = url;
+        });
+      }
+
+      lastSourceRef.current = source;
+
+      // Render to canvases
+      const main = mainCanvasRef.current;
+      if (main) {
+        const container = mainContainerRef.current;
+        if (container) {
+          const w = container.clientWidth;
+          const h = Math.min(w * 0.75, window.innerHeight - 120);
+          main.width = w; main.height = h;
+        }
+        renderFromSource(source, main, cornersRef.current);
+      }
+      const preview = previewCanvasRef.current;
+      if (preview) renderFromSource(source, preview, cornersRef.current);
+      const configCanvas = configCanvasRef.current;
+      if (configCanvas) drawOverlay(configCanvas, source, cornersRef.current, null);
     } catch (e) {
-      console.error('Error starting stream:', e);
-      toast.error('Error al conectar con el stream');
+      console.error('Error fetching snapshot:', e);
+    } finally {
       setLoading(false);
     }
   }, [embedUrl]);
 
+  // Auto-refresh
   useEffect(() => {
-    startStream();
-    return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
-  }, [startStream]);
+    fetchSnapshot();
+    intervalRef.current = setInterval(fetchSnapshot, refreshInterval * 1000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [refreshInterval, fetchSnapshot]);
 
-  // Capture frames periodically
+  // Redraw when corners change in config mode
   useEffect(() => {
-    if (!streamReady) return;
-    const capture = () => {
-      const video = videoRef.current;
-      if (!video || video.readyState < 2) return;
-      if (!configMode) {
-        const main = mainCanvasRef.current;
-        const container = mainContainerRef.current;
-        if (main && container) {
-          const w = container.clientWidth;
-          const h = Math.min(w * 0.75, window.innerHeight - 120);
-          main.width = w; main.height = h;
-          renderFromVideo(video, main, cornersRef.current);
-        }
-      } else {
-        const cc = configCanvasRef.current;
-        if (cc) drawOverlay(cc, video, cornersRef.current, null);
-        const pc = previewCanvasRef.current;
-        if (pc) renderFromVideo(video, pc, cornersRef.current);
-      }
-    };
-    capture();
-    frameIntervalRef.current = setInterval(capture, refreshInterval * 1000);
-    return () => { if (frameIntervalRef.current) clearInterval(frameIntervalRef.current); };
-  }, [streamReady, configMode, refreshInterval]);
-
-  useEffect(() => {
-    if (!configMode || !streamReady) return;
-    const video = videoRef.current;
-    if (!video || video.readyState < 2) return;
+    if (!configMode || !lastSourceRef.current) return;
     const cc = configCanvasRef.current;
-    if (cc) drawOverlay(cc, video, corners, dragging);
+    if (cc) drawOverlay(cc, lastSourceRef.current, corners, dragging);
     const pc = previewCanvasRef.current;
-    if (pc) renderFromVideo(video, pc, corners);
-  }, [corners, configMode, dragging, streamReady]);
+    if (pc) renderFromSource(lastSourceRef.current, pc, corners);
+  }, [corners, configMode, dragging]);
 
+  // Resize main canvas
   useEffect(() => {
     if (configMode) return;
     const resize = () => {
@@ -359,8 +339,7 @@ const Nevera = () => {
       const w = container.clientWidth;
       const h = Math.min(w * 0.75, window.innerHeight - 120);
       canvas.width = w; canvas.height = h;
-      const video = videoRef.current;
-      if (video && video.readyState >= 2) renderFromVideo(video, canvas, cornersRef.current);
+      if (lastSourceRef.current) renderFromSource(lastSourceRef.current, canvas, cornersRef.current);
     };
     resize();
     window.addEventListener('resize', resize);
@@ -411,7 +390,6 @@ const Nevera = () => {
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
-        <video ref={videoRef} muted playsInline autoPlay className="hidden" crossOrigin="anonymous" />
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
@@ -421,8 +399,8 @@ const Nevera = () => {
           </div>
           <div className="flex items-center gap-2">
             {loading && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
-            <Button variant="outline" size="sm" onClick={startStream} className="gap-2">
-              <RefreshCw className="h-4 w-4" /> Reconectar
+            <Button variant="outline" size="sm" onClick={fetchSnapshot} className="gap-2">
+              <RefreshCw className="h-4 w-4" /> Actualizar
             </Button>
             <Button
               variant={configMode ? "default" : "outline"} size="sm"
@@ -434,15 +412,6 @@ const Nevera = () => {
           </div>
         </div>
 
-        {!streamReady && !loading && (
-          <div className="text-center py-12 text-muted-foreground">
-            <p>No se pudo conectar al stream.</p>
-            <Button variant="outline" className="mt-4" onClick={startStream}>
-              <RefreshCw className="h-4 w-4 mr-2" /> Reintentar
-            </Button>
-          </div>
-        )}
-
         {configMode ? (
           <div className="space-y-4">
             <div className="space-y-2">
@@ -450,13 +419,13 @@ const Nevera = () => {
               <Input value={embedUrl} onChange={(e) => setEmbedUrl(e.target.value)} placeholder="https://rtsp.me/embed/..." />
             </div>
             <div className="space-y-2">
-              <Label>Intervalo de captura: {refreshInterval}s</Label>
-              <Slider value={[refreshInterval]} onValueChange={([v]) => setRefreshInterval(v)} min={1} max={30} step={1} />
+              <Label>Intervalo de refresco: {refreshInterval}s</Label>
+              <Slider value={[refreshInterval]} onValueChange={([v]) => setRefreshInterval(v)} min={3} max={60} step={1} />
             </div>
             <p className="text-sm text-muted-foreground">Arrastra las esquinas verdes para ajustar el recorte:</p>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
-                <p className="text-sm font-medium mb-1">Imagen original (en vivo)</p>
+                <p className="text-sm font-medium mb-1">Imagen original</p>
                 <canvas ref={configCanvasRef} width={640} height={480}
                   className="w-full border rounded-lg cursor-crosshair touch-none"
                   onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
