@@ -123,12 +123,12 @@ function drawOverlay(canvas: HTMLCanvasElement, video: HTMLVideoElement, corners
 
 // Custom XHR loader that proxies all HLS requests through our edge function
 class ProxyLoader extends Hls.DefaultConfig.loader {
+  private _xhr: XMLHttpRequest | null = null;
+
   load(context: any, config: any, callbacks: any) {
-    // Rewrite the URL to go through our proxy
     const originalUrl = context.url;
     const proxyPayload = JSON.stringify({ proxyUrl: originalUrl });
 
-    // Use fetch-based approach for proxy
     const xhr = new XMLHttpRequest();
     const stats = this.stats;
     stats.loading.start = performance.now();
@@ -146,46 +146,33 @@ class ProxyLoader extends Hls.DefaultConfig.loader {
       stats.total = stats.loaded;
 
       if (xhr.status >= 200 && xhr.status < 300) {
-        // For m3u8 playlists, we need to rewrite segment URLs to absolute
         let response = xhr.response;
         if (typeof response === 'string' && response.includes('#EXTINF')) {
           const base = originalUrl.substring(0, originalUrl.lastIndexOf('/') + 1);
           response = response.replace(/^(?!#)(?!https?:\/\/)(.+\.ts.*)$/gm, base + '$1');
         }
-
         callbacks.onSuccess({
-          url: originalUrl,
-          data: response,
-          code: xhr.status,
-          text: xhr.statusText,
+          url: originalUrl, data: response, code: xhr.status, text: xhr.statusText,
         }, stats, context, xhr);
       } else {
         callbacks.onError({ code: xhr.status, text: xhr.statusText }, context, xhr, stats);
       }
     };
-
-    xhr.onerror = () => {
-      callbacks.onError({ code: xhr.status, text: 'Network error' }, context, xhr, stats);
-    };
-
-    xhr.ontimeout = () => {
-      callbacks.onTimeout(stats, context, xhr);
-    };
+    xhr.onerror = () => { callbacks.onError({ code: xhr.status, text: 'Network error' }, context, xhr, stats); };
+    xhr.ontimeout = () => { callbacks.onTimeout(stats, context, xhr); };
 
     xhr.timeout = config.timeout;
     xhr.send(proxyPayload);
-
-    this.loader = xhr;
+    this._xhr = xhr;
   }
 
   abort() {
-    if (this.loader && this.loader.readyState !== 4) {
-      this.loader.abort();
-    }
+    if (this._xhr && this._xhr.readyState !== 4) this._xhr.abort();
   }
 
   destroy() {
     this.abort();
+    this._xhr = null;
   }
 }
 
