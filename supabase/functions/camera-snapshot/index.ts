@@ -9,40 +9,29 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { embedUrl } = await req.json();
+    const { snapshotUrl } = await req.json();
 
-    if (!embedUrl) {
+    if (!snapshotUrl) {
       return new Response(
-        JSON.stringify({ success: false, error: 'embedUrl is required' }),
+        JSON.stringify({ success: false, error: 'snapshotUrl is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const ua = { 'User-Agent': 'Mozilla/5.0' };
+    // Add cache-busting
+    const url = snapshotUrl + (snapshotUrl.includes('?') ? '&' : '?') + '_t=' + Date.now();
 
-    // Fetch the embed page to extract poster URL
-    const embedResponse = await fetch(embedUrl, { headers: ua });
-    const html = await embedResponse.text();
-
-    // Extract poster URL from the video tag
-    const posterMatch = html.match(/poster="([^"]+)"/);
-    if (!posterMatch) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Could not find poster image' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Add cache-busting to poster URL
-    const posterUrl = posterMatch[1] + (posterMatch[1].includes('?') ? '&' : '?') + '_t=' + Date.now();
-
-    // Fetch the poster image
-    const imageResponse = await fetch(posterUrl, {
-      headers: { ...ua, 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
+    const imageResponse = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Cache-Control': 'no-cache, no-store',
+        'Pragma': 'no-cache',
+      },
     });
+
     if (!imageResponse.ok) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Failed to fetch poster image' }),
+        JSON.stringify({ success: false, error: `Failed to fetch snapshot: ${imageResponse.status}` }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

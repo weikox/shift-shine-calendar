@@ -20,7 +20,7 @@ const DEFAULT_CORNERS: Corners = [
   { x: 0.05, y: 0.95 },
 ];
 
-const DEFAULT_EMBED_URL = "https://rtsp.me/embed/ZBbRS9ke/";
+const DEFAULT_SNAPSHOT_URL = "https://go2rtc.dmoneo.ovh/api/frame.jpeg?src=nevera";
 
 function solveProjection(src: Corners, dst: Corners): number[] {
   const A: number[][] = [], b: number[] = [];
