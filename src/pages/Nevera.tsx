@@ -93,7 +93,7 @@ const Nevera = () => {
   const { storageMethod } = useStorageMethod();
   const { user } = useAuth();
   const [configMode, setConfigMode] = useState(false);
-  const [embedUrl, setEmbedUrl] = useState(DEFAULT_EMBED_URL);
+  const [snapshotUrl, setSnapshotUrl] = useState(DEFAULT_SNAPSHOT_URL);
   const [corners, setCorners] = useState<Corners>(DEFAULT_CORNERS);
   const [refreshInterval, setRefreshInterval] = useState(10);
   const [loading, setLoading] = useState(false);
@@ -115,7 +115,8 @@ const Nevera = () => {
         try {
           const parsed = JSON.parse(localConfig);
           if (parsed.corners) setCorners(parsed.corners);
-          if (parsed.embedUrl) setEmbedUrl(parsed.embedUrl);
+          if (parsed.snapshotUrl) setSnapshotUrl(parsed.snapshotUrl);
+          else if (parsed.embedUrl) setSnapshotUrl(parsed.embedUrl);
           if (parsed.refreshInterval) setRefreshInterval(parsed.refreshInterval);
         } catch {}
       }
@@ -125,7 +126,8 @@ const Nevera = () => {
           if (data?.content) {
             const parsed = JSON.parse(data.content);
             if (parsed.corners) setCorners(parsed.corners);
-            if (parsed.embedUrl) setEmbedUrl(parsed.embedUrl);
+            if (parsed.snapshotUrl) setSnapshotUrl(parsed.snapshotUrl);
+            else if (parsed.embedUrl) setSnapshotUrl(parsed.embedUrl);
             if (parsed.refreshInterval) setRefreshInterval(parsed.refreshInterval);
           }
         } catch (e) { console.error('Error loading config:', e); }
@@ -135,7 +137,7 @@ const Nevera = () => {
   }, [storageMethod, user]);
 
   const saveConfig = async () => {
-    const config = JSON.stringify({ corners, embedUrl, refreshInterval });
+    const config = JSON.stringify({ corners, snapshotUrl, refreshInterval });
     localStorage.setItem('nevera-config', config);
     if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
       try {
@@ -153,7 +155,7 @@ const Nevera = () => {
       const response = await fetch(`${supabaseUrl}/functions/v1/camera-snapshot`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}`, 'apikey': supabaseKey },
-        body: JSON.stringify({ embedUrl }),
+        body: JSON.stringify({ snapshotUrl }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
@@ -176,7 +178,7 @@ const Nevera = () => {
       img.src = url;
     } catch (e) { console.error('Error fetching snapshot:', e); }
     finally { setLoading(false); }
-  }, [embedUrl]);
+  }, [snapshotUrl]);
 
   useEffect(() => {
     fetchSnapshot();
@@ -231,8 +233,8 @@ const Nevera = () => {
         {configMode ? (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>URL del stream (embed)</Label>
-              <Input value={embedUrl} onChange={(e) => setEmbedUrl(e.target.value)} placeholder="https://rtsp.me/embed/..." />
+              <Label>URL del snapshot (go2rtc)</Label>
+              <Input value={snapshotUrl} onChange={(e) => setSnapshotUrl(e.target.value)} placeholder="https://go2rtc.example.com/api/frame.jpeg?src=nevera" />
             </div>
             <div className="space-y-2">
               <Label>Intervalo de refresco: {refreshInterval}s</Label>
