@@ -167,15 +167,10 @@ const Enlaces = () => {
                 </CardHeader>
                 <CardContent className="p-3 pt-1 space-y-1">
                   {items.map((link) => (
-                    <div key={link.id} className="flex items-center gap-2 group rounded-md hover:bg-muted/50 p-1.5">
-                      <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-sm font-medium truncate">{link.title}</span>
-                          {link.description && (
-                            <span className="text-xs text-muted-foreground truncate hidden md:inline">— {link.description}</span>
-                          )}
-                        </div>
+                    <div key={link.id} className="flex items-center gap-1.5 group rounded-md hover:bg-muted/50 px-1.5 py-1">
+                      <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 min-w-0 flex-1">
+                        <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <span className="text-xs font-medium truncate">{link.title}</span>
                       </a>
                       {(link.username || link.password) && (
                         <div className="flex items-center gap-1 shrink-0">
@@ -183,12 +178,12 @@ const Enlaces = () => {
                           {link.password && <CredentialChip label="P" value={link.password} secret />}
                         </div>
                       )}
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(link)}>
-                          <Pencil className="h-3.5 w-3.5" />
+                      <div className="flex gap-0.5 shrink-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(link)}>
+                          <Pencil className="h-3 w-3" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(link.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDelete(link.id)}>
+                          <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
                     </div>
