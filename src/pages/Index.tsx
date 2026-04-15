@@ -1,11 +1,10 @@
 import { Link } from "react-router-dom";
-import { Calendar, Wallet, StickyNote, Refrigerator, Home } from "lucide-react";
+import { Calendar, Wallet, StickyNote, Refrigerator, Home, BarChart3, LinkIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCalendar } from "@/contexts/CalendarContext";
 import { useFinances } from "@/contexts/FinancesContext";
 import { useMemo } from "react";
 import { GlobalBackup } from "@/components/GlobalBackup";
-import { BarChart3 } from "lucide-react";
 const Index = () => {
   const { days } = useCalendar();
   const { getTotalBalance, getPendingTransactionsTotal } = useFinances();
@@ -61,7 +60,7 @@ const Index = () => {
           <GlobalBackup />
         </div>
         
-        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-6 flex-1 min-h-0 auto-rows-fr">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 flex-1 min-h-0 auto-rows-fr">
           <Link to="/calendar" className="group min-h-0">
             <Card className="transition-all hover:shadow-lg hover:scale-105 h-full flex flex-col">
               <CardHeader className="p-3 md:p-6 pb-1 md:pb-2 flex-1 min-h-0">
@@ -181,16 +180,35 @@ const Index = () => {
             <Card className="transition-all hover:shadow-lg hover:scale-105 h-full flex flex-col">
               <CardHeader className="p-3 md:p-6 pb-1 md:pb-2 flex-1 min-h-0">
                 <div className="flex items-center gap-2">
-                  <BarChart3 className="h-6 w-6 md:h-12 md:w-12 text-primary shrink-0" />
-                  <CardTitle className="text-sm md:text-2xl">Resumen</CardTitle>
+                  <BarChart3 className="h-6 w-6 md:h-8 md:w-8 text-primary shrink-0" />
+                  <CardTitle className="text-sm md:text-xl">Resumen</CardTitle>
                 </div>
-                <CardDescription className="text-[10px] md:text-sm hidden md:block">
+                <CardDescription className="text-[10px] md:text-sm hidden lg:block">
                   Vista detallada de ingresos y gastos
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
                 <p className="text-[10px] md:text-sm text-muted-foreground">
                   Movimientos mensuales
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link to="/enlaces" className="group min-h-0">
+            <Card className="transition-all hover:shadow-lg hover:scale-105 h-full flex flex-col">
+              <CardHeader className="p-3 md:p-6 pb-1 md:pb-2 flex-1 min-h-0">
+                <div className="flex items-center gap-2">
+                  <LinkIcon className="h-6 w-6 md:h-8 md:w-8 text-primary shrink-0" />
+                  <CardTitle className="text-sm md:text-xl">Enlaces</CardTitle>
+                </div>
+                <CardDescription className="text-[10px] md:text-sm hidden lg:block">
+                  Links a webs importantes
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
+                <p className="text-[10px] md:text-sm text-muted-foreground">
+                  Proveedores, bancos, seguros...
                 </p>
               </CardContent>
             </Card>
