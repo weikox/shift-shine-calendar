@@ -173,30 +173,36 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          password: string | null
           title: string
           updated_at: string
           url: string
           user_id: string
+          username: string | null
         }
         Insert: {
           category?: string | null
           created_at?: string
           description?: string | null
           id?: string
+          password?: string | null
           title: string
           updated_at?: string
           url: string
           user_id: string
+          username?: string | null
         }
         Update: {
           category?: string | null
           created_at?: string
           description?: string | null
           id?: string
+          password?: string | null
           title?: string
           updated_at?: string
           url?: string
           user_id?: string
+          username?: string | null
         }
         Relationships: []
       }
