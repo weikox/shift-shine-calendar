@@ -39,8 +39,7 @@ const CredentialChip = ({ label, value, secret }: { label: string; value: string
   const [visible, setVisible] = useState(false);
   return (
     <span className="inline-flex items-center gap-0.5 bg-muted rounded px-1.5 py-0.5 text-[11px] font-mono">
-      <span className="text-muted-foreground mr-0.5">{label}:</span>
-      <span className="max-w-[80px] truncate">{secret && !visible ? "••••••" : value}</span>
+      <span className="max-w-[80px] truncate">{secret && !visible ? "••" : value}</span>
       {secret && (
         <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setVisible(!visible); }} className="ml-0.5 text-muted-foreground hover:text-foreground">
           {visible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
