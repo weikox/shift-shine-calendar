@@ -22,12 +22,13 @@ interface LinkItem {
 
 const CATEGORIES = [
   "general", "proveedores", "instituciones", "bancos",
-  "seguros", "salud", "servicios", "otros",
+  "seguros", "salud", "servicios", "tiendas", "intranet", "tecno", "otros",
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
   general: "General", proveedores: "Proveedores", instituciones: "Instituciones",
-  bancos: "Bancos", seguros: "Seguros", salud: "Salud", servicios: "Servicios", otros: "Otros",
+  bancos: "Bancos", seguros: "Seguros", salud: "Salud", servicios: "Servicios",
+  tiendas: "Tiendas", intranet: "Intranet", tecno: "Tecno", otros: "Otros",
 };
 
 const copyToClipboard = (text: string, label: string) => {
