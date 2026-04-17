@@ -42,7 +42,7 @@ interface FinancesContextType {
   accounts: AccountBalance[];
   transfers: Transfer[];
   currentMonth: string;
-  addTransaction: (transaction: Omit<Transaction, 'id'>) => string;
+  addTransaction: (transaction: Omit<Transaction, 'id'>, options?: { silent?: boolean }) => string;
   updateTransaction: (id: string, transaction: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
   addTransfer: (transfer: Omit<Transfer, 'id'>) => void;
@@ -472,7 +472,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isLoadingMonth]);
 
-  const addTransaction = (transaction: Omit<Transaction, 'id'>): string => {
+  const addTransaction = (transaction: Omit<Transaction, 'id'>, options?: { silent?: boolean }): string => {
     markDirty();
     // Generate a proper UUID for cloud compatibility
     const newId = crypto.randomUUID();
@@ -482,12 +482,12 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       // Ensure date is a full date, not just month format
       date: transaction.date.length === 7 ? `${transaction.date}-01` : transaction.date,
     };
-    setTransactions([...transactions, newTransaction]);
+    setTransactions(prev => [...prev, newTransaction]);
     
     if (transaction.executed) {
       updateAccountBalanceFromTransaction(newTransaction);
     }
-    toast.success("Movimiento añadido");
+    if (!options?.silent) toast.success("Movimiento añadido");
     return newId;
   };
 
