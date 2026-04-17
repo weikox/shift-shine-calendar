@@ -472,7 +472,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isLoadingMonth]);
 
-  const addTransaction = (transaction: Omit<Transaction, 'id'>): string => {
+  const addTransaction = (transaction: Omit<Transaction, 'id'>, options?: { silent?: boolean }): string => {
     markDirty();
     // Generate a proper UUID for cloud compatibility
     const newId = crypto.randomUUID();
@@ -487,7 +487,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
     if (transaction.executed) {
       updateAccountBalanceFromTransaction(newTransaction);
     }
-    toast.success("Movimiento añadido");
+    if (!options?.silent) toast.success("Movimiento añadido");
     return newId;
   };
 
