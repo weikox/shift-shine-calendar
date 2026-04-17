@@ -442,9 +442,20 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
   const saveToStorage = () => {
     // Always save to localStorage for instant feedback
     if (storageMethod !== 'cloud') {
-      localStorage.setItem(`finances-transactions-${currentMonth}`, JSON.stringify(transactions));
-      localStorage.setItem('finances-accounts', JSON.stringify(accounts));
-      localStorage.setItem(`finances-transfers-${currentMonth}`, JSON.stringify(transfers));
+      try {
+        // Strip heavy base64 document payloads before persisting to avoid quota errors.
+        // We keep document metadata (id/name/type) so the UI can still show the clip icon.
+        const lightTransactions = transactions.map(t => ({
+          ...t,
+          documents: t.documents?.map(({ data, ...rest }) => rest),
+        }));
+        localStorage.setItem(`finances-transactions-${currentMonth}`, JSON.stringify(lightTransactions));
+        localStorage.setItem('finances-accounts', JSON.stringify(accounts));
+        localStorage.setItem(`finances-transfers-${currentMonth}`, JSON.stringify(transfers));
+      } catch (err) {
+        console.error('⚠️ localStorage save failed (likely quota exceeded):', err);
+        toast.error('Almacenamiento local lleno. Activa modo Nube en Ajustes.');
+      }
     }
 
     // Sync to cloud if needed
