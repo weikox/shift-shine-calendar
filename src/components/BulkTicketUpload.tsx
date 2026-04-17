@@ -172,7 +172,7 @@ export const BulkTicketUpload = () => {
           category: DEFAULT_CATEGORY,
           date: item.date,
           documents: localDocs,
-        });
+        }, { silent: true });
 
         // Subida a la nube si procede
         if ((storageMethod === "cloud" || storageMethod === "hybrid") && newId) {
