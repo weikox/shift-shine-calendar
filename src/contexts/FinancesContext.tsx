@@ -42,7 +42,7 @@ interface FinancesContextType {
   accounts: AccountBalance[];
   transfers: Transfer[];
   currentMonth: string;
-  addTransaction: (transaction: Omit<Transaction, 'id'>) => string;
+  addTransaction: (transaction: Omit<Transaction, 'id'>, options?: { silent?: boolean }) => string;
   updateTransaction: (id: string, transaction: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
   addTransfer: (transfer: Omit<Transfer, 'id'>) => void;
