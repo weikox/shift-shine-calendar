@@ -482,7 +482,7 @@ export const FinancesProvider = ({ children }: { children: ReactNode }) => {
       // Ensure date is a full date, not just month format
       date: transaction.date.length === 7 ? `${transaction.date}-01` : transaction.date,
     };
-    setTransactions([...transactions, newTransaction]);
+    setTransactions(prev => [...prev, newTransaction]);
     
     if (transaction.executed) {
       updateAccountBalanceFromTransaction(newTransaction);
