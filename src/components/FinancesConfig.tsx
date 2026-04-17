@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { BankImport } from "@/components/BankImport";
+import { BulkTicketUpload } from "@/components/BulkTicketUpload";
 
 interface FinancesConfigProps {
   onClose: () => void;
@@ -177,6 +178,8 @@ export const FinancesConfig = ({ onClose }: FinancesConfigProps) => {
               </p>
             </CardContent>
           </Card>
+
+          <BulkTicketUpload />
 
           <BankImport />
         </div>
