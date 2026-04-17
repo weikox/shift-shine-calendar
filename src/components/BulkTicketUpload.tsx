@@ -238,7 +238,7 @@ export const BulkTicketUpload = () => {
                   }`}
                 >
                   {item.valid ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+                    <CheckCircle2 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                   ) : (
                     <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
                   )}
