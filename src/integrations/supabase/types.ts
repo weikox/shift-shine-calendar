@@ -206,6 +206,106 @@ export type Database = {
         }
         Relationships: []
       }
+      monthly_task_completions: {
+        Row: {
+          amount: number
+          completion_date: string
+          created_at: string
+          document_path: string | null
+          id: string
+          month: string
+          template_id: string
+          transaction_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          completion_date: string
+          created_at?: string
+          document_path?: string | null
+          id?: string
+          month: string
+          template_id: string
+          transaction_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          completion_date?: string
+          created_at?: string
+          document_path?: string | null
+          id?: string
+          month?: string
+          template_id?: string
+          transaction_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_task_completions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "monthly_task_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monthly_task_templates: {
+        Row: {
+          account_id: string
+          category: string
+          created_at: string
+          estimated_amount: number | null
+          id: string
+          is_active: boolean
+          name: string
+          requires_document: boolean
+          sort_order: number
+          tx_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          category?: string
+          created_at?: string
+          estimated_amount?: number | null
+          id?: string
+          is_active?: boolean
+          name: string
+          requires_document?: boolean
+          sort_order?: number
+          tx_type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          category?: string
+          created_at?: string
+          estimated_amount?: number | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          requires_document?: boolean
+          sort_order?: number
+          tx_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_task_templates_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notes: {
         Row: {
           content: string | null
