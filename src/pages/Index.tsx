@@ -1,13 +1,36 @@
 import { Link } from "react-router-dom";
-import { Calendar, Wallet, StickyNote, Refrigerator, Home, BarChart3, LinkIcon } from "lucide-react";
+import { Calendar, Wallet, StickyNote, Refrigerator, Home, BarChart3, LinkIcon, CheckSquare } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCalendar } from "@/contexts/CalendarContext";
 import { useFinances } from "@/contexts/FinancesContext";
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { GlobalBackup } from "@/components/GlobalBackup";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 const Index = () => {
   const { days } = useCalendar();
-  const { getTotalBalance, getPendingTransactionsTotal } = useFinances();
+  const { getTotalBalance, getPendingTransactionsTotal, currentMonth } = useFinances();
+  const { user } = useAuth();
+  const [taskSummary, setTaskSummary] = useState({ total: 0, done: 0 });
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const [tplRes, compRes] = await Promise.all([
+        supabase
+          .from("monthly_task_templates")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("is_active", true),
+        supabase
+          .from("monthly_task_completions")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("month", currentMonth),
+      ]);
+      setTaskSummary({ total: tplRes.count || 0, done: compRes.count || 0 });
+    })();
+  }, [user, currentMonth]);
 
   const calendarSummary = useMemo(() => {
     const today = new Date();
