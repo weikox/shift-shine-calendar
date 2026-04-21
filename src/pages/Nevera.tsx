@@ -301,8 +301,23 @@ const Nevera = () => {
             </div>
           </div>
         ) : (
-          <div ref={mainContainerRef}>
-            <canvas ref={mainCanvasRef} className="w-full rounded-lg" />
+          <div className="space-y-4">
+            <div ref={mainContainerRef}>
+              <canvas ref={mainCanvasRef} className="w-full rounded-lg" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="nevera-note">Notas</Label>
+                {noteSaving && <span className="text-xs text-muted-foreground flex items-center gap-1"><RefreshCw className="h-3 w-3 animate-spin" />Guardando...</span>}
+              </div>
+              <Textarea
+                id="nevera-note"
+                value={noteContent}
+                onChange={(e) => setNoteContent(e.target.value)}
+                placeholder="Escribe aquí... se guarda automáticamente"
+                className="min-h-[160px]"
+              />
+            </div>
           </div>
         )}
       </div>
