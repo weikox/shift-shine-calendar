@@ -218,6 +218,42 @@ const Nevera = () => {
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => { e.preventDefault(); const p = getTouchPos(e); for (let i = 0; i < 4; i++) { const dx = p.x - corners[i].x, dy = p.y - corners[i].y; if (Math.sqrt(dx*dx+dy*dy) < 0.06) { setDragging(i); return; } } };
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => { e.preventDefault(); if (dragging === null) return; const p = getTouchPos(e); const nc = [...corners] as Corners; nc[dragging] = { x: Math.max(0, Math.min(1, p.x)), y: Math.max(0, Math.min(1, p.y)) }; setCorners(nc); };
 
+  // Load note content
+  useEffect(() => {
+    const loadNote = async () => {
+      const local = localStorage.getItem('nevera-note');
+      if (local !== null) setNoteContent(local);
+      if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
+        try {
+          const { data } = await supabase.from('notes').select('content').eq('user_id', user.id).eq('type', 'nevera-note').maybeSingle();
+          if (data?.content !== undefined && data?.content !== null) setNoteContent(data.content);
+        } catch (e) { console.error('Error loading nevera note:', e); }
+      }
+      noteLoadedRef.current = true;
+    };
+    loadNote();
+  }, [storageMethod, user]);
+
+  // Autosave note (debounced)
+  useEffect(() => {
+    if (!noteLoadedRef.current) return;
+    if (noteSaveTimeoutRef.current) clearTimeout(noteSaveTimeoutRef.current);
+    noteSaveTimeoutRef.current = setTimeout(async () => {
+      try { localStorage.setItem('nevera-note', noteContent); } catch {}
+      if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
+        setNoteSaving(true);
+        try {
+          await supabase.from('notes').upsert(
+            { user_id: user.id, type: 'nevera-note', content: noteContent },
+            { onConflict: 'user_id,type' }
+          );
+        } catch (e) { console.error('Error saving nevera note:', e); }
+        finally { setNoteSaving(false); }
+      }
+    }, 800);
+    return () => { if (noteSaveTimeoutRef.current) clearTimeout(noteSaveTimeoutRef.current); };
+  }, [noteContent, storageMethod, user]);
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
