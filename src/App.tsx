@@ -19,6 +19,8 @@ import Nevera from "./pages/Nevera";
 import Domotica from "./pages/Domotica";
 import FinancialSummary from "./pages/FinancialSummary";
 import Enlaces from "./pages/Enlaces";
+import MonthlyTasks from "./pages/MonthlyTasks";
+import MonthlyTasksConfig from "./pages/MonthlyTasksConfig";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +47,8 @@ const App = () => (
                   <Route path="/domotica" element={<Domotica />} />
                   <Route path="/resumen-financiero" element={<FinancialSummary />} />
                   <Route path="/enlaces" element={<Enlaces />} />
+                  <Route path="/tareas-mes" element={<MonthlyTasks />} />
+                  <Route path="/tareas-mes/config" element={<MonthlyTasksConfig />} />
                   <Route path="/auth" element={<Auth />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
