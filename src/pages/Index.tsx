@@ -236,6 +236,28 @@ const Index = () => {
               </CardContent>
             </Card>
           </Link>
+
+          <Link to="/tareas-mes" className="group min-h-0">
+            <Card className="transition-all hover:shadow-lg hover:scale-105 h-full flex flex-col">
+              <CardHeader className="p-3 md:p-6 pb-1 md:pb-2 flex-1 min-h-0">
+                <div className="flex items-center gap-2">
+                  <CheckSquare className="h-6 w-6 md:h-8 md:w-8 text-primary shrink-0" />
+                  <CardTitle className="text-sm md:text-xl">Tareas Mes</CardTitle>
+                </div>
+                <CardDescription className="text-[10px] md:text-sm hidden lg:block">
+                  Ingresos y gastos fijos
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
+                <div className="text-[10px] md:text-sm">
+                  <span className="text-muted-foreground">Progreso: </span>
+                  <span className={`font-medium ${taskSummary.total > 0 && taskSummary.done === taskSummary.total ? 'text-primary' : ''}`}>
+                    {taskSummary.done}/{taskSummary.total}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </div>
     </div>
