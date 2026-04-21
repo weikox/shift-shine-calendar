@@ -87,7 +87,7 @@ const MonthlyTasks = () => {
       let documentPath: string | null = null;
       if (pendingFile && (storageMethod === "cloud" || storageMethod === "hybrid")) {
         const doc = await uploadDocument(pendingFile, txId);
-        if (doc) documentPath = doc.storage_path;
+        if (doc) documentPath = (doc as any).storagePath || (doc as any).storage_path || null;
       }
 
       // Save completion record
