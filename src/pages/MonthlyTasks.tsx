@@ -177,7 +177,7 @@ const MonthlyTasks = () => {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5 h-full auto-rows-min content-start">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-1 h-full auto-rows-min content-start">
               {templates.map((t) => {
                 const comp = getCompletion(t.id);
                 const isActive = activeTaskId === t.id;
@@ -190,39 +190,39 @@ const MonthlyTasks = () => {
                       isDone ? "bg-primary/10 border-primary/40" : ""
                     } ${isActive ? "ring-2 ring-primary" : ""}`}
                   >
-                    <CardContent className="p-2">
-                      <div className="flex items-start gap-2">
+                    <CardContent className="p-1.5">
+                      <div className="flex items-start gap-1.5">
                         <button
                           onClick={() => (isDone ? handleUndo(t) : handleStart(t))}
-                          className={`shrink-0 h-6 w-6 rounded-md border flex items-center justify-center transition-colors ${
+                          className={`shrink-0 h-5 w-5 rounded border flex items-center justify-center transition-colors ${
                             isDone
                               ? "bg-primary border-primary text-primary-foreground"
                               : "hover:bg-muted"
                           }`}
                           aria-label={isDone ? "Deshacer" : "Completar"}
                         >
-                          {isDone && <Check className="h-4 w-4" />}
+                          {isDone && <Check className="h-3.5 w-3.5" />}
                         </button>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1">
-                            <p className="text-[11px] font-medium truncate">{t.name}</p>
+                          <div className="flex items-center gap-0.5">
+                            <p className="text-[10px] font-medium truncate leading-tight">{t.name}</p>
                             {t.requires_document && (
-                              <Paperclip className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
+                              <Paperclip className="h-2 w-2 text-muted-foreground shrink-0" />
                             )}
                           </div>
                           {isDone ? (
-                            <p className="text-[10px] font-semibold text-primary">
+                            <p className="text-[9px] font-semibold text-primary leading-tight">
                               {comp!.amount.toFixed(2)}€
                             </p>
                           ) : isActive ? (
-                            <div className="mt-1 space-y-1">
+                            <div className="mt-0.5 space-y-0.5">
                               <Input
                                 type="number"
                                 step="0.01"
                                 value={amountInput}
                                 onChange={(e) => setAmountInput(e.target.value)}
-                                placeholder="Importe €"
-                                className="h-6 text-[11px] px-1.5"
+                                placeholder="€"
+                                className="h-5 text-[10px] px-1"
                                 autoFocus
                               />
                               {t.requires_document && (
@@ -240,31 +240,31 @@ const MonthlyTasks = () => {
                                     size="sm"
                                     variant="outline"
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="h-6 text-[10px] w-full justify-start"
+                                    className="h-5 text-[9px] w-full justify-start px-1"
                                   >
-                                    <Paperclip className="h-3 w-3 mr-1" />
-                                    {pendingFile ? pendingFile.name.slice(0, 18) : "Adjuntar"}
+                                    <Paperclip className="h-2.5 w-2.5 mr-0.5" />
+                                    {pendingFile ? pendingFile.name.slice(0, 10) : "Doc"}
                                   </Button>
                                 </>
                               )}
-                              <div className="flex gap-1">
+                              <div className="flex gap-0.5">
                                 <Button
                                   size="sm"
                                   onClick={() => handleComplete(t)}
                                   disabled={saving}
-                                  className="h-6 text-[10px] flex-1"
+                                  className="h-5 text-[9px] flex-1 px-1"
                                 >
                                   {saving ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
                                   ) : (
-                                    "Guardar"
+                                    "OK"
                                   )}
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   onClick={handleCancel}
-                                  className="h-6 text-[10px] px-2"
+                                  className="h-5 text-[9px] px-1"
                                 >
                                   ✕
                                 </Button>
@@ -272,7 +272,7 @@ const MonthlyTasks = () => {
                             </div>
                           ) : (
                             t.estimated_amount && (
-                              <p className="text-[10px] text-muted-foreground">
+                              <p className="text-[9px] text-muted-foreground leading-tight">
                                 ~{t.estimated_amount.toFixed(2)}€
                               </p>
                             )
