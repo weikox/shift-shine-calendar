@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Textarea } from "@/components/ui/textarea";
 
 type Corner = { x: number; y: number };
 type Corners = [Corner, Corner, Corner, Corner];
@@ -98,6 +99,10 @@ const Nevera = () => {
   const [refreshInterval, setRefreshInterval] = useState(10);
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
+  const [noteContent, setNoteContent] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const noteSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noteLoadedRef = useRef(false);
 
   const mainCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -213,6 +218,42 @@ const Nevera = () => {
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => { e.preventDefault(); const p = getTouchPos(e); for (let i = 0; i < 4; i++) { const dx = p.x - corners[i].x, dy = p.y - corners[i].y; if (Math.sqrt(dx*dx+dy*dy) < 0.06) { setDragging(i); return; } } };
   const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => { e.preventDefault(); if (dragging === null) return; const p = getTouchPos(e); const nc = [...corners] as Corners; nc[dragging] = { x: Math.max(0, Math.min(1, p.x)), y: Math.max(0, Math.min(1, p.y)) }; setCorners(nc); };
 
+  // Load note content
+  useEffect(() => {
+    const loadNote = async () => {
+      const local = localStorage.getItem('nevera-note');
+      if (local !== null) setNoteContent(local);
+      if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
+        try {
+          const { data } = await supabase.from('notes').select('content').eq('user_id', user.id).eq('type', 'nevera-note').maybeSingle();
+          if (data?.content !== undefined && data?.content !== null) setNoteContent(data.content);
+        } catch (e) { console.error('Error loading nevera note:', e); }
+      }
+      noteLoadedRef.current = true;
+    };
+    loadNote();
+  }, [storageMethod, user]);
+
+  // Autosave note (debounced)
+  useEffect(() => {
+    if (!noteLoadedRef.current) return;
+    if (noteSaveTimeoutRef.current) clearTimeout(noteSaveTimeoutRef.current);
+    noteSaveTimeoutRef.current = setTimeout(async () => {
+      try { localStorage.setItem('nevera-note', noteContent); } catch {}
+      if ((storageMethod === 'cloud' || storageMethod === 'hybrid') && user) {
+        setNoteSaving(true);
+        try {
+          await supabase.from('notes').upsert(
+            { user_id: user.id, type: 'nevera-note', content: noteContent },
+            { onConflict: 'user_id,type' }
+          );
+        } catch (e) { console.error('Error saving nevera note:', e); }
+        finally { setNoteSaving(false); }
+      }
+    }, 800);
+    return () => { if (noteSaveTimeoutRef.current) clearTimeout(noteSaveTimeoutRef.current); };
+  }, [noteContent, storageMethod, user]);
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
@@ -260,8 +301,23 @@ const Nevera = () => {
             </div>
           </div>
         ) : (
-          <div ref={mainContainerRef}>
-            <canvas ref={mainCanvasRef} className="w-full rounded-lg" />
+          <div className="space-y-4">
+            <div ref={mainContainerRef}>
+              <canvas ref={mainCanvasRef} className="w-full rounded-lg" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="nevera-note">Notas</Label>
+                {noteSaving && <span className="text-xs text-muted-foreground flex items-center gap-1"><RefreshCw className="h-3 w-3 animate-spin" />Guardando...</span>}
+              </div>
+              <Textarea
+                id="nevera-note"
+                value={noteContent}
+                onChange={(e) => setNoteContent(e.target.value)}
+                placeholder="Escribe aquí... se guarda automáticamente"
+                className="min-h-[160px]"
+              />
+            </div>
           </div>
         )}
       </div>
