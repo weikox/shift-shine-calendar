@@ -187,7 +187,7 @@ const MonthlyTasks = () => {
                   <Card
                     key={t.id}
                     className={`transition-all ${
-                      isDone ? "bg-green-500/10 border-green-500/40" : ""
+                      isDone ? "bg-primary/10 border-primary/40" : ""
                     } ${isActive ? "ring-2 ring-primary" : ""}`}
                   >
                     <CardContent className="p-2">
@@ -196,7 +196,7 @@ const MonthlyTasks = () => {
                           onClick={() => (isDone ? handleUndo(t) : handleStart(t))}
                           className={`shrink-0 h-6 w-6 rounded-md border flex items-center justify-center transition-colors ${
                             isDone
-                              ? "bg-green-600 border-green-600 text-white"
+                              ? "bg-primary border-primary text-primary-foreground"
                               : "hover:bg-muted"
                           }`}
                           aria-label={isDone ? "Deshacer" : "Completar"}
@@ -211,7 +211,7 @@ const MonthlyTasks = () => {
                             )}
                           </div>
                           {isDone ? (
-                            <p className="text-[10px] text-green-700 dark:text-green-400 font-semibold">
+                            <p className="text-[10px] font-semibold text-primary">
                               {comp!.amount.toFixed(2)}€
                             </p>
                           ) : isActive ? (
