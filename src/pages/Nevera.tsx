@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Textarea } from "@/components/ui/textarea";
 
 type Corner = { x: number; y: number };
 type Corners = [Corner, Corner, Corner, Corner];
