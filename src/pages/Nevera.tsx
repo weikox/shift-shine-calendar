@@ -99,6 +99,10 @@ const Nevera = () => {
   const [refreshInterval, setRefreshInterval] = useState(10);
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
+  const [noteContent, setNoteContent] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const noteSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noteLoadedRef = useRef(false);
 
   const mainCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
