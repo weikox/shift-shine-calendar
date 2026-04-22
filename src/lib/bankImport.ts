@@ -18,6 +18,7 @@ const DESCRIPTION_KEYS = ["concepto", "descripcion", "descripción", "movimiento
 const AMOUNT_KEYS = ["importe", "cantidad", "amount", "valor", "euros", "total", "importe eur"];
 const DEBIT_KEYS = ["cargo", "debe", "debito", "débito", "retirada", "withdrawal"];
 const CREDIT_KEYS = ["abono", "haber", "credito", "crédito", "ingreso", "deposit"];
+const KNOWN_HEADER_KEYS = [...DATE_KEYS, ...DESCRIPTION_KEYS, ...AMOUNT_KEYS, ...DEBIT_KEYS, ...CREDIT_KEYS];
 
 const normalize = (value: string) =>
   value
@@ -33,6 +34,31 @@ const findKey = (keys: string[], candidates: string[]) => {
     const normalizedKey = normalize(key);
     return normalizedCandidates.some((candidate) => normalizedKey === candidate || normalizedKey.includes(candidate));
   });
+};
+
+const headerScore = (values: unknown[]) =>
+  values.reduce((score, value) => {
+    const normalizedValue = normalize(String(value ?? ""));
+    if (!normalizedValue) return score;
+    return score + (KNOWN_HEADER_KEYS.some((key) => normalizedValue === normalize(key) || normalizedValue.includes(normalize(key))) ? 1 : 0);
+  }, 0);
+
+export const normalizeTabularRows = (rawRows: unknown[][]): Row[] => {
+  if (!rawRows.length) return [];
+
+  const headerIndex = rawRows.reduce((bestIndex, row, index) => {
+    const score = headerScore(row);
+    const bestScore = headerScore(rawRows[bestIndex] ?? []);
+    return score > bestScore ? index : bestIndex;
+  }, 0);
+
+  const headers = rawRows[headerIndex].map((header, index) => String(header || `Columna ${index + 1}`).trim());
+  return rawRows.slice(headerIndex + 1).map((row) =>
+    headers.reduce<Row>((acc, header, index) => {
+      acc[header || `Columna ${index + 1}`] = row[index] ?? "";
+      return acc;
+    }, {})
+  );
 };
 
 export const createBankTransactionKey = (transaction: Pick<ParsedBankTransaction, "date" | "description" | "amount"> & { account?: string }) =>
@@ -108,14 +134,7 @@ export const parseCsvRows = (text: string): Row[] => {
     return cells;
   };
 
-  const headers = parseLine(rows[0]);
-  return rows.slice(1).map((line) => {
-    const values = parseLine(line);
-    return headers.reduce<Row>((acc, header, index) => {
-      acc[header || `Columna ${index + 1}`] = values[index] ?? "";
-      return acc;
-    }, {});
-  });
+  return normalizeTabularRows(rows.map(parseLine));
 };
 
 export const parseBankRows = (rows: Row[], fallbackMonth: string): BankParseResult => {
