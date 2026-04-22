@@ -37,7 +37,7 @@ const findKey = (keys: string[], candidates: string[]) => {
 };
 
 const headerScore = (values: unknown[]) =>
-  values.reduce((score, value) => {
+  values.reduce<number>((score, value) => {
     const normalizedValue = normalize(String(value ?? ""));
     if (!normalizedValue) return score;
     return score + (KNOWN_HEADER_KEYS.some((key) => normalizedValue === normalize(key) || normalizedValue.includes(normalize(key))) ? 1 : 0);
