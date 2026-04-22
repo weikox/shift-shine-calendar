@@ -18,7 +18,9 @@ const DESCRIPTION_KEYS = ["concepto", "descripcion", "descripción", "movimiento
 const AMOUNT_KEYS = ["importe", "cantidad", "amount", "valor", "euros", "total", "importe eur"];
 const DEBIT_KEYS = ["cargo", "debe", "debito", "débito", "retirada", "withdrawal"];
 const CREDIT_KEYS = ["abono", "haber", "credito", "crédito", "ingreso", "deposit"];
-const KNOWN_HEADER_KEYS = [...DATE_KEYS, ...DESCRIPTION_KEYS, ...AMOUNT_KEYS, ...DEBIT_KEYS, ...CREDIT_KEYS];
+const OPERATION_KEYS = ["operacion", "operación"];
+const BALANCE_KEYS = ["saldo", "balance"];
+const KNOWN_HEADER_KEYS = [...DATE_KEYS, ...DESCRIPTION_KEYS, ...AMOUNT_KEYS, ...DEBIT_KEYS, ...CREDIT_KEYS, ...OPERATION_KEYS, ...BALANCE_KEYS];
 
 const normalize = (value: string) =>
   value
@@ -30,10 +32,32 @@ const normalize = (value: string) =>
 
 const findKey = (keys: string[], candidates: string[]) => {
   const normalizedCandidates = candidates.map(normalize);
-  return keys.find((key) => {
+  let bestMatch: { key: string; strength: number; candidateIndex: number } | null = null;
+
+  keys.forEach((key) => {
     const normalizedKey = normalize(key);
-    return normalizedCandidates.some((candidate) => normalizedKey === candidate || normalizedKey.includes(candidate));
+    normalizedCandidates.forEach((candidate, candidateIndex) => {
+      const strength = normalizedKey === candidate
+        ? 3
+        : normalizedKey.startsWith(`${candidate} `) || normalizedKey.endsWith(` ${candidate}`)
+          ? 2
+          : normalizedKey.includes(candidate)
+            ? 1
+            : 0;
+
+      if (!strength) return;
+
+      if (
+        !bestMatch ||
+        strength > bestMatch.strength ||
+        (strength === bestMatch.strength && candidateIndex < bestMatch.candidateIndex)
+      ) {
+        bestMatch = { key, strength, candidateIndex };
+      }
+    });
   });
+
+  return bestMatch?.key;
 };
 
 const headerScore = (values: unknown[]) =>
