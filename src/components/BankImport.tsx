@@ -183,8 +183,14 @@ export const BankImport = () => {
 
         {parsedData.length > 0 && (
           <>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <Badge variant="secondary">Formato: {detectedFormat || "genérico"}</Badge>
+              <Badge variant="outline">Nuevos: {newTransactions.length}</Badge>
+              <Badge variant="outline">Ya registrados: {duplicateCount}</Badge>
+              {skippedRows > 0 && <Badge variant="destructive">Omitidos: {skippedRows}</Badge>}
+            </div>
             <div className="border rounded-lg p-4 max-h-64 overflow-y-auto">
-              <h3 className="font-medium mb-2">Vista previa ({parsedData.length} transacciones)</h3>
+              <h3 className="font-medium mb-2">Vista previa ({newTransactions.length} movimientos nuevos)</h3>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -194,7 +200,7 @@ export const BankImport = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {parsedData.slice(0, 10).map((trans, idx) => (
+                  {newTransactions.slice(0, 10).map((trans, idx) => (
                     <TableRow key={idx}>
                       <TableCell>{trans.date}</TableCell>
                       <TableCell>{trans.description}</TableCell>
@@ -207,15 +213,21 @@ export const BankImport = () => {
                   ))}
                 </TableBody>
               </Table>
-              {parsedData.length > 10 && (
+              {newTransactions.length === 0 && (
+                <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Todos los movimientos del archivo ya están registrados
+                </div>
+              )}
+              {newTransactions.length > 10 && (
                 <p className="text-sm text-muted-foreground mt-2">
-                  ... y {parsedData.length - 10} transacciones más
+                  ... y {newTransactions.length - 10} movimientos nuevos más
                 </p>
               )}
             </div>
 
-            <Button onClick={handleImport} className="w-full" disabled={!selectedAccount}>
-              Importar {parsedData.length} transacciones
+            <Button onClick={handleImport} className="w-full" disabled={!selectedAccount || newTransactions.length === 0}>
+              Registrar {newTransactions.length} movimientos nuevos
             </Button>
           </>
         )}
@@ -223,9 +235,9 @@ export const BankImport = () => {
         <div className="text-sm text-muted-foreground space-y-1">
           <p className="font-medium">Formatos soportados:</p>
           <ul className="list-disc list-inside space-y-1">
-            <li>CSV con columnas: Fecha, Descripción, Cantidad</li>
-            <li>Excel (.xlsx, .xls) con las mismas columnas</li>
-            <li>Exportaciones de BBVA, Santander, CaixaBank, etc.</li>
+            <li>CSV o Excel con columnas de fecha, concepto e importe</li>
+            <li>Formatos con columnas separadas de cargo/abono</li>
+            <li>Detecta movimientos ya registrados por cuenta, fecha, descripción e importe</li>
           </ul>
         </div>
       </CardContent>
