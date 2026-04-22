@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Upload, FileSpreadsheet, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useFinances } from "@/contexts/FinancesContext";
-import { createBankTransactionKey, parseBankRows, parseCsvRows, ParsedBankTransaction } from "@/lib/bankImport";
+import { createBankTransactionKey, normalizeTabularRows, parseBankRows, parseCsvRows, ParsedBankTransaction } from "@/lib/bankImport";
 import * as XLSX from 'xlsx';
 
 export const BankImport = () => {
@@ -70,7 +70,8 @@ export const BankImport = () => {
           } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
             const workbook = XLSX.read(data, { type: 'binary' });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: "" });
+            const rawRows = XLSX.utils.sheet_to_json<unknown[]>(firstSheet, { header: 1, defval: "" });
+            const jsonData = normalizeTabularRows(rawRows);
             const result = parseBankRows(jsonData, currentMonth);
             parsed = result.transactions;
             format = result.detectedFormat;
