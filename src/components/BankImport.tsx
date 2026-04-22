@@ -1,26 +1,50 @@
-import { useState, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Upload, FileSpreadsheet } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Upload, FileSpreadsheet, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { useFinances, Transaction } from "@/contexts/FinancesContext";
+import { useFinances } from "@/contexts/FinancesContext";
+import { createBankTransactionKey, parseBankRows, parseCsvRows, ParsedBankTransaction } from "@/lib/bankImport";
 import * as XLSX from 'xlsx';
 
-interface ParsedTransaction {
-  date: string;
-  description: string;
-  amount: number;
-  type: 'income' | 'expense';
-}
-
 export const BankImport = () => {
-  const { accounts, addTransaction, currentMonth } = useFinances();
+  const { accounts, addTransaction, currentMonth, transactions } = useFinances();
   const [selectedAccount, setSelectedAccount] = useState<string>("");
-  const [parsedData, setParsedData] = useState<ParsedTransaction[]>([]);
+  const [parsedData, setParsedData] = useState<ParsedBankTransaction[]>([]);
+  const [detectedFormat, setDetectedFormat] = useState("");
+  const [skippedRows, setSkippedRows] = useState(0);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const existingKeys = useMemo(
+    () =>
+      new Set(
+        transactions.map((transaction) =>
+          createBankTransactionKey({
+            account: transaction.account,
+            date: transaction.date,
+            description: transaction.name,
+            amount: transaction.amount,
+          })
+        )
+      ),
+    [transactions]
+  );
+
+  const newTransactions = useMemo(
+    () =>
+      selectedAccount
+        ? parsedData.filter((transaction) =>
+            !existingKeys.has(createBankTransactionKey({ ...transaction, account: selectedAccount }))
+          )
+        : parsedData,
+    [existingKeys, parsedData, selectedAccount]
+  );
+
+  const duplicateCount = Math.max(parsedData.length - newTransactions.length, 0);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -33,22 +57,30 @@ export const BankImport = () => {
       reader.onload = (e) => {
         try {
           const data = e.target?.result;
-          let parsed: ParsedTransaction[] = [];
+          let parsed: ParsedBankTransaction[] = [];
+          let format = "";
+          let skipped = 0;
 
           if (file.name.endsWith('.csv')) {
-            // Parse CSV
             const text = data as string;
-            parsed = parseCSV(text);
+            const result = parseBankRows(parseCsvRows(text), currentMonth);
+            parsed = result.transactions;
+            format = result.detectedFormat;
+            skipped = result.skippedRows;
           } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-            // Parse Excel
             const workbook = XLSX.read(data, { type: 'binary' });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-            parsed = parseExcel(jsonData);
+            const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: "" });
+            const result = parseBankRows(jsonData, currentMonth);
+            parsed = result.transactions;
+            format = result.detectedFormat;
+            skipped = result.skippedRows;
           }
 
           setParsedData(parsed);
-          toast.success(`${parsed.length} transacciones encontradas`);
+          setDetectedFormat(format);
+          setSkippedRows(skipped);
+          toast.success(`${parsed.length} movimientos detectados`);
         } catch (error) {
           console.error('Error parsing file:', error);
           toast.error('Error al procesar el archivo');
@@ -69,93 +101,19 @@ export const BankImport = () => {
     }
   };
 
-  const parseCSV = (text: string): ParsedTransaction[] => {
-    const lines = text.split('\n').filter(line => line.trim());
-    const transactions: ParsedTransaction[] = [];
-
-    // Skip header and parse data
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(/[,;]/);
-      
-      if (values.length >= 3) {
-        const date = values[0]?.trim();
-        const description = values[1]?.trim();
-        const amountStr = values[2]?.trim().replace(/[^\d,.-]/g, '').replace(',', '.');
-        const amount = parseFloat(amountStr);
-
-        if (date && description && !isNaN(amount)) {
-          transactions.push({
-            date: formatDate(date),
-            description,
-            amount: Math.abs(amount),
-            type: amount >= 0 ? 'income' : 'expense',
-          });
-        }
-      }
-    }
-
-    return transactions;
-  };
-
-  const parseExcel = (data: any[]): ParsedTransaction[] => {
-    const transactions: ParsedTransaction[] = [];
-
-    data.forEach(row => {
-      const keys = Object.keys(row);
-      const date = row[keys[0]];
-      const description = row[keys[1]];
-      const amount = parseFloat(String(row[keys[2]]).replace(/[^\d,.-]/g, '').replace(',', '.'));
-
-      if (date && description && !isNaN(amount)) {
-        transactions.push({
-          date: formatDate(String(date)),
-          description: String(description),
-          amount: Math.abs(amount),
-          type: amount >= 0 ? 'income' : 'expense',
-        });
-      }
-    });
-
-    return transactions;
-  };
-
-  const formatDate = (dateStr: string): string => {
-    // Try to parse common date formats
-    const formats = [
-      /(\d{2})\/(\d{2})\/(\d{4})/,  // DD/MM/YYYY
-      /(\d{4})-(\d{2})-(\d{2})/,     // YYYY-MM-DD
-      /(\d{2})-(\d{2})-(\d{4})/,     // DD-MM-YYYY
-    ];
-
-    for (const format of formats) {
-      const match = dateStr.match(format);
-      if (match) {
-        if (format === formats[0] || format === formats[2]) {
-          // DD/MM/YYYY or DD-MM-YYYY
-          return `${match[3]}-${match[2]}-${match[1]}`;
-        } else {
-          // YYYY-MM-DD
-          return dateStr;
-        }
-      }
-    }
-
-    return currentMonth + '-01';
-  };
-
   const handleImport = () => {
     if (!selectedAccount) {
       toast.error('Selecciona una cuenta');
       return;
     }
 
-    if (parsedData.length === 0) {
-      toast.error('No hay transacciones para importar');
+    if (newTransactions.length === 0) {
+      toast.error('No hay movimientos nuevos para importar');
       return;
     }
 
     let imported = 0;
-    parsedData.forEach(trans => {
+    newTransactions.forEach(trans => {
       addTransaction({
         name: trans.description,
         amount: trans.amount,
@@ -167,7 +125,7 @@ export const BankImport = () => {
       imported++;
     });
 
-    toast.success(`${imported} transacciones importadas`);
+    toast.success(`${imported} movimientos nuevos importados`);
     setParsedData([]);
     setSelectedAccount("");
     if (fileInputRef.current) {
@@ -225,8 +183,14 @@ export const BankImport = () => {
 
         {parsedData.length > 0 && (
           <>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <Badge variant="secondary">Formato: {detectedFormat || "genérico"}</Badge>
+              <Badge variant="outline">Nuevos: {newTransactions.length}</Badge>
+              <Badge variant="outline">Ya registrados: {duplicateCount}</Badge>
+              {skippedRows > 0 && <Badge variant="destructive">Omitidos: {skippedRows}</Badge>}
+            </div>
             <div className="border rounded-lg p-4 max-h-64 overflow-y-auto">
-              <h3 className="font-medium mb-2">Vista previa ({parsedData.length} transacciones)</h3>
+              <h3 className="font-medium mb-2">Vista previa ({newTransactions.length} movimientos nuevos)</h3>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -236,7 +200,7 @@ export const BankImport = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {parsedData.slice(0, 10).map((trans, idx) => (
+                  {newTransactions.slice(0, 10).map((trans, idx) => (
                     <TableRow key={idx}>
                       <TableCell>{trans.date}</TableCell>
                       <TableCell>{trans.description}</TableCell>
@@ -249,15 +213,21 @@ export const BankImport = () => {
                   ))}
                 </TableBody>
               </Table>
-              {parsedData.length > 10 && (
+              {newTransactions.length === 0 && (
+                <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Todos los movimientos del archivo ya están registrados
+                </div>
+              )}
+              {newTransactions.length > 10 && (
                 <p className="text-sm text-muted-foreground mt-2">
-                  ... y {parsedData.length - 10} transacciones más
+                  ... y {newTransactions.length - 10} movimientos nuevos más
                 </p>
               )}
             </div>
 
-            <Button onClick={handleImport} className="w-full" disabled={!selectedAccount}>
-              Importar {parsedData.length} transacciones
+            <Button onClick={handleImport} className="w-full" disabled={!selectedAccount || newTransactions.length === 0}>
+              Registrar {newTransactions.length} movimientos nuevos
             </Button>
           </>
         )}
@@ -265,9 +235,9 @@ export const BankImport = () => {
         <div className="text-sm text-muted-foreground space-y-1">
           <p className="font-medium">Formatos soportados:</p>
           <ul className="list-disc list-inside space-y-1">
-            <li>CSV con columnas: Fecha, Descripción, Cantidad</li>
-            <li>Excel (.xlsx, .xls) con las mismas columnas</li>
-            <li>Exportaciones de BBVA, Santander, CaixaBank, etc.</li>
+            <li>CSV o Excel con columnas de fecha, concepto e importe</li>
+            <li>Formatos con columnas separadas de cargo/abono</li>
+            <li>Detecta movimientos ya registrados por cuenta, fecha, descripción e importe</li>
           </ul>
         </div>
       </CardContent>
