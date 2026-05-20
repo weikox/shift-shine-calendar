@@ -54,7 +54,7 @@ export const matchesRule = (description: string, rule: CategorizationRule): bool
 export const categorizeDescription = (
   description: string,
   rules: CategorizationRule[],
-  fallback: RuleCategory = "extra"
+  fallback: RuleCategory = "daily"
 ): RuleCategory => {
   for (const rule of rules) {
     if (matchesRule(description, rule)) return rule.category;
