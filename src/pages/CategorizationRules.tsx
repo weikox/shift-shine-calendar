@@ -130,7 +130,7 @@ const CategorizationRules = () => {
           <CardHeader>
             <CardTitle>Reglas activas ({rules.length})</CardTitle>
             <CardDescription>
-              Si ninguna regla coincide, el movimiento se clasifica como <strong>Extra</strong>.
+              Si ninguna regla coincide, el movimiento se clasifica como <strong>Diario</strong>.
             </CardDescription>
           </CardHeader>
           <CardContent>
