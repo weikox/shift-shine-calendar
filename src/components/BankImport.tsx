@@ -187,6 +187,12 @@ export const BankImport = () => {
             <Upload className="h-4 w-4 mr-2" />
             {loading ? 'Procesando...' : 'Subir archivo CSV/Excel'}
           </Button>
+          <Link to="/cuentas/reglas-categorizacion" className="block">
+            <Button variant="ghost" size="sm" className="w-full">
+              <Settings2 className="h-4 w-4 mr-2" />
+              Reglas de categorización ({rules.length})
+            </Button>
+          </Link>
         </div>
 
         {parsedData.length > 0 && (
@@ -207,18 +213,34 @@ export const BankImport = () => {
                     <TableHead className="text-right">Cantidad</TableHead>
                   </TableRow>
                 </TableHeader>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Descripción</TableHead>
+                    <TableHead>Categoría</TableHead>
+                    <TableHead className="text-right">Cantidad</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
-                  {newTransactions.slice(0, 10).map((trans, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>{trans.date}</TableCell>
-                      <TableCell>{trans.description}</TableCell>
-                      <TableCell className="text-right">
-                        <span className={trans.type === 'income' ? 'text-green-600' : 'text-red-600'}>
-                          {trans.type === 'income' ? '+' : '-'}{trans.amount.toFixed(2)}€
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {newTransactions.slice(0, 10).map((trans, idx) => {
+                    const cat = categorizeFor(trans);
+                    return (
+                      <TableRow key={idx}>
+                        <TableCell>{trans.date}</TableCell>
+                        <TableCell>{trans.description}</TableCell>
+                        <TableCell>
+                          <Badge variant={cat === "income" ? "default" : "outline"}>
+                            {cat === "income" ? "Ingreso" : CATEGORY_LABELS[cat]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className={trans.type === 'income' ? 'text-green-600' : 'text-red-600'}>
+                            {trans.type === 'income' ? '+' : '-'}{trans.amount.toFixed(2)}€
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
               {newTransactions.length === 0 && (

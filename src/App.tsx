@@ -21,6 +21,7 @@ import FinancialSummary from "./pages/FinancialSummary";
 import Enlaces from "./pages/Enlaces";
 import MonthlyTasks from "./pages/MonthlyTasks";
 import MonthlyTasksConfig from "./pages/MonthlyTasksConfig";
+import CategorizationRules from "./pages/CategorizationRules";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
                   <Route path="/config/eventos" element={<ConfigEvents />} />
                   <Route path="/config/festivos" element={<ConfigHolidays />} />
                   <Route path="/cuentas" element={<Finances />} />
+                  <Route path="/cuentas/reglas-categorizacion" element={<CategorizationRules />} />
                   <Route path="/pizarra" element={<Pizarra />} />
                   <Route path="/nevera" element={<Nevera />} />
                   <Route path="/domotica" element={<Domotica />} />
