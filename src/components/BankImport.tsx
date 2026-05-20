@@ -8,6 +8,9 @@ import { Upload, FileSpreadsheet, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useFinances } from "@/contexts/FinancesContext";
 import { createBankTransactionKey, normalizeTabularRows, parseBankRows, parseCsvRows, ParsedBankTransaction } from "@/lib/bankImport";
+import { categorizeDescription, loadCategorizationRules, CATEGORY_LABELS } from "@/lib/categorizationRules";
+import { Link } from "react-router-dom";
+import { Settings2 } from "lucide-react";
 import * as XLSX from 'xlsx';
 
 export const BankImport = () => {
@@ -18,6 +21,10 @@ export const BankImport = () => {
   const [skippedRows, setSkippedRows] = useState(0);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const rules = useMemo(() => loadCategorizationRules(), [parsedData]);
+
+  const categorizeFor = (trans: ParsedBankTransaction) =>
+    trans.type === "income" ? "income" : categorizeDescription(trans.description, rules);
 
   const existingKeys = useMemo(
     () =>
@@ -120,7 +127,7 @@ export const BankImport = () => {
         amount: trans.amount,
         account: selectedAccount,
         executed: true,
-        category: trans.type === 'income' ? 'income' : 'extra',
+        category: categorizeFor(trans),
         date: trans.date,
       });
       imported++;
