@@ -2,12 +2,22 @@ import type { Transaction } from "@/contexts/FinancesContext";
 
 export type RuleMatchType = "starts_with" | "contains" | "equals" | "ends_with";
 export type RuleCategory = Exclude<Transaction["category"], "income">;
+export type RuleOperator = "AND" | "OR";
+
+export interface RuleCondition {
+  pattern: string;
+  matchType: RuleMatchType;
+}
 
 export interface CategorizationRule {
   id: string;
   pattern: string;
   matchType: RuleMatchType;
   category: RuleCategory;
+  // Optional second condition for concatenation
+  operator?: RuleOperator;
+  pattern2?: string;
+  matchType2?: RuleMatchType;
 }
 
 const STORAGE_KEY = "bank-categorization-rules";
@@ -34,21 +44,34 @@ export const saveCategorizationRules = (rules: CategorizationRule[]) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(rules));
 };
 
-export const matchesRule = (description: string, rule: CategorizationRule): boolean => {
-  const text = normalize(description);
-  const pattern = normalize(rule.pattern);
-  if (!pattern) return false;
-  switch (rule.matchType) {
+const matchesCondition = (
+  text: string,
+  pattern: string,
+  matchType: RuleMatchType
+): boolean => {
+  const p = normalize(pattern);
+  if (!p) return false;
+  switch (matchType) {
     case "starts_with":
-      return text.startsWith(pattern);
+      return text.startsWith(p);
     case "ends_with":
-      return text.endsWith(pattern);
+      return text.endsWith(p);
     case "equals":
-      return text === pattern;
+      return text === p;
     case "contains":
     default:
-      return text.includes(pattern);
+      return text.includes(p);
   }
+};
+
+export const matchesRule = (description: string, rule: CategorizationRule): boolean => {
+  const text = normalize(description);
+  const first = matchesCondition(text, rule.pattern, rule.matchType);
+  if (!rule.operator || !rule.pattern2 || !rule.matchType2) {
+    return first;
+  }
+  const second = matchesCondition(text, rule.pattern2, rule.matchType2);
+  return rule.operator === "AND" ? first && second : first || second;
 };
 
 export const categorizeDescription = (

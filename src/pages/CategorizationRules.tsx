@@ -6,12 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, ArrowUp, ArrowDown, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   CategorizationRule,
   RuleCategory,
   RuleMatchType,
+  RuleOperator,
   CATEGORY_LABELS,
   MATCH_TYPE_LABELS,
   loadCategorizationRules,
@@ -25,6 +26,12 @@ const CategorizationRules = () => {
   const [pattern, setPattern] = useState("");
   const [matchType, setMatchType] = useState<RuleMatchType>("contains");
   const [category, setCategory] = useState<RuleCategory>("fixed");
+
+  const [useSecond, setUseSecond] = useState(false);
+  const [operator, setOperator] = useState<RuleOperator>("AND");
+  const [pattern2, setPattern2] = useState("");
+  const [matchType2, setMatchType2] = useState<RuleMatchType>("contains");
+
   const [testText, setTestText] = useState("");
 
   useEffect(() => {
@@ -41,12 +48,23 @@ const CategorizationRules = () => {
       toast.error("Introduce un texto a buscar");
       return;
     }
-    const next: CategorizationRule[] = [
-      ...rules,
-      { id: crypto.randomUUID(), pattern: pattern.trim(), matchType, category },
-    ];
-    persist(next);
+    if (useSecond && !pattern2.trim()) {
+      toast.error("Introduce el segundo texto a buscar");
+      return;
+    }
+    const newRule: CategorizationRule = {
+      id: crypto.randomUUID(),
+      pattern: pattern.trim(),
+      matchType,
+      category,
+      ...(useSecond
+        ? { operator, pattern2: pattern2.trim(), matchType2 }
+        : {}),
+    };
+    persist([...rules, newRule]);
     setPattern("");
+    setPattern2("");
+    setUseSecond(false);
     toast.success("Regla añadida");
   };
 
@@ -83,11 +101,11 @@ const CategorizationRules = () => {
           <CardHeader>
             <CardTitle>Nueva regla</CardTitle>
             <CardDescription>
-              Las reglas se evalúan en orden de arriba a abajo. La primera coincidencia define la categoría.
+              Las reglas se evalúan en orden de arriba a abajo. La primera coincidencia define la categoría. Puedes concatenar dos condiciones con AND u OR.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr,1fr,auto] gap-3 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr,2fr] gap-3 items-end">
               <div>
                 <Label>Condición</Label>
                 <Select value={matchType} onValueChange={(v) => setMatchType(v as RuleMatchType)}>
@@ -105,9 +123,56 @@ const CategorizationRules = () => {
                   value={pattern}
                   onChange={(e) => setPattern(e.target.value)}
                   placeholder="Ej: MERCADONA"
-                  onKeyDown={(e) => e.key === "Enter" && handleAdd()}
                 />
               </div>
+            </div>
+
+            {useSecond ? (
+              <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs">Operador</Label>
+                    <Select value={operator} onValueChange={(v) => setOperator(v as RuleOperator)}>
+                      <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="AND">Y (AND)</SelectItem>
+                        <SelectItem value="OR">O (OR)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setUseSecond(false)}>
+                    <X className="h-4 w-4 mr-1" /> Quitar
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-[1fr,2fr] gap-3 items-end">
+                  <div>
+                    <Label>2ª condición</Label>
+                    <Select value={matchType2} onValueChange={(v) => setMatchType2(v as RuleMatchType)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(MATCH_TYPE_LABELS).map(([k, v]) => (
+                          <SelectItem key={k} value={k}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>2º texto</Label>
+                    <Input
+                      value={pattern2}
+                      onChange={(e) => setPattern2(e.target.value)}
+                      placeholder="Ej: PAGO"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setUseSecond(true)}>
+                <Plus className="h-4 w-4 mr-2" /> Añadir 2ª condición
+              </Button>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 items-end">
               <div>
                 <Label>Categoría</Label>
                 <Select value={category} onValueChange={(v) => setCategory(v as RuleCategory)}>
@@ -120,7 +185,7 @@ const CategorizationRules = () => {
                 </Select>
               </div>
               <Button onClick={handleAdd}>
-                <Plus className="h-4 w-4 mr-2" /> Añadir
+                <Plus className="h-4 w-4 mr-2" /> Añadir regla
               </Button>
             </div>
           </CardContent>
@@ -143,11 +208,19 @@ const CategorizationRules = () => {
                 {rules.map((rule, idx) => (
                   <div
                     key={rule.id}
-                    className="flex items-center gap-2 p-3 border rounded-lg"
+                    className="flex items-center gap-2 p-3 border rounded-lg flex-wrap"
                   >
                     <span className="text-xs text-muted-foreground w-6">{idx + 1}.</span>
                     <Badge variant="outline">{MATCH_TYPE_LABELS[rule.matchType]}</Badge>
-                    <span className="font-mono text-sm flex-1 truncate">"{rule.pattern}"</span>
+                    <span className="font-mono text-sm truncate">"{rule.pattern}"</span>
+                    {rule.operator && rule.pattern2 && rule.matchType2 && (
+                      <>
+                        <Badge variant="secondary">{rule.operator === "AND" ? "Y" : "O"}</Badge>
+                        <Badge variant="outline">{MATCH_TYPE_LABELS[rule.matchType2]}</Badge>
+                        <span className="font-mono text-sm truncate">"{rule.pattern2}"</span>
+                      </>
+                    )}
+                    <div className="flex-1" />
                     <Badge>{CATEGORY_LABELS[rule.category]}</Badge>
                     <Button variant="ghost" size="icon" onClick={() => move(idx, -1)} disabled={idx === 0}>
                       <ArrowUp className="h-4 w-4" />
