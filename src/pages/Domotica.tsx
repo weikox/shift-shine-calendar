@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Power, Loader2, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import HomeAssistantPanel from "@/components/HomeAssistantPanel";
 
 interface Device {
   deviceid: string;
@@ -113,74 +115,72 @@ const Domotica = () => {
             <h1 className="text-3xl font-bold text-foreground">Domótica</h1>
           </div>
           
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={loadDevices}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-          </Button>
         </div>
 
-        {loading && devices.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Loader2 className="h-12 w-12 text-muted-foreground mb-4 animate-spin" />
-              <p className="text-muted-foreground text-center">
-                Cargando dispositivos...
-              </p>
-            </CardContent>
-          </Card>
-        ) : devices.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Power className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground text-center mb-4">
-                No hay dispositivos conectados
-              </p>
-              <Button onClick={loadDevices} disabled={loading}>
-                Reintentar
+        <Tabs defaultValue="ha" className="w-full">
+          <TabsList className="mb-4">
+            <TabsTrigger value="ha">Home Assistant</TabsTrigger>
+            <TabsTrigger value="ewelink">eWeLink</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="ha">
+            <HomeAssistantPanel />
+          </TabsContent>
+
+          <TabsContent value="ewelink">
+            <div className="flex justify-end mb-3">
+              <Button variant="outline" size="icon" onClick={loadDevices} disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {devices.map((device) => (
-              <Card key={device.deviceid}>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span className="truncate">{device.name}</span>
-                    <div className={`w-2 h-2 rounded-full ${device.online ? 'bg-green-500' : 'bg-red-500'}`} />
-                  </CardTitle>
-                  <CardDescription>
-                    {device.online ? 'En línea' : 'Sin conexión'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">
-                      {getDeviceState(device) ? 'Encendido' : 'Apagado'}
-                    </span>
-                    {togglingDevice === device.deviceid ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <Switch
-                        checked={getDeviceState(device)}
-                        onCheckedChange={() => toggleDevice(device.deviceid)}
-                        disabled={!device.online}
-                      />
-                    )}
-                  </div>
+            </div>
+            {loading && devices.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="h-12 w-12 text-muted-foreground mb-4 animate-spin" />
+                  <p className="text-muted-foreground text-center">Cargando dispositivos...</p>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        )}
+            ) : devices.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Power className="h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground text-center mb-4">No hay dispositivos conectados</p>
+                  <Button onClick={loadDevices} disabled={loading}>Reintentar</Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {devices.map((device) => (
+                  <Card key={device.deviceid}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        <span className="truncate">{device.name}</span>
+                        <div className={`w-2 h-2 rounded-full ${device.online ? 'bg-green-500' : 'bg-red-500'}`} />
+                      </CardTitle>
+                      <CardDescription>{device.online ? 'En línea' : 'Sin conexión'}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">
+                          {getDeviceState(device) ? 'Encendido' : 'Apagado'}
+                        </span>
+                        {togglingDevice === device.deviceid ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <Switch
+                            checked={getDeviceState(device)}
+                            onCheckedChange={() => toggleDevice(device.deviceid)}
+                            disabled={!device.online}
+                          />
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
