@@ -16,7 +16,7 @@ interface Cfg {
 
 const DEFAULT_CFG: Cfg = {
   baseUrl: "https://nevera.dmoneo.ovh",
-  streams: ["nevera", "cam2", "cam3", "cam4"],
+  streams: ["nevera", "dcs-6500lh samano", "dcs-8600lh samano", "dcs-6500lh zamakola"],
   intervalMs: 2000,
 };
 
