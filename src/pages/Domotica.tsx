@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import HomeAssistantPanel from "@/components/HomeAssistantPanel";
+import Go2rtcPanel from "@/components/Go2rtcPanel";
 
 interface Device {
   deviceid: string;
@@ -120,8 +121,13 @@ const Domotica = () => {
         <Tabs defaultValue="ha" className="w-full">
           <TabsList className="mb-4">
             <TabsTrigger value="ha">Home Assistant</TabsTrigger>
+            <TabsTrigger value="cameras">Cámaras</TabsTrigger>
             <TabsTrigger value="ewelink">eWeLink</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="cameras">
+            <Go2rtcPanel />
+          </TabsContent>
 
           <TabsContent value="ha">
             <HomeAssistantPanel />
