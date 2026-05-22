@@ -11,8 +11,18 @@ const EWELINK_API_URL = 'https://eu-apia.coolkit.cc';
 async function getAccessToken(appId: string, appSecret: string): Promise<string> {
   const timestamp = Date.now();
   const nonce = Math.random().toString(36).substring(2, 10);
-  
-  // Create signature using HMAC-SHA256
+
+  const bodyObj = {
+    lang: 'en',
+    countryCode: '+34',
+    ts: timestamp,
+    version: 8,
+    appid: appId,
+    nonce,
+  };
+  const bodyStr = JSON.stringify(bodyObj);
+
+  // eWeLink v2 sign: HMAC-SHA256(appSecret, raw JSON body), base64
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',
@@ -21,11 +31,9 @@ async function getAccessToken(appId: string, appSecret: string): Promise<string>
     false,
     ['sign']
   );
-  
-  const signData = `${appId}_${timestamp}_${nonce}`;
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(signData));
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(bodyStr));
   const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
-  
+
   const response = await fetch(`${EWELINK_API_URL}/v2/user/login`, {
     method: 'POST',
     headers: {
@@ -34,22 +42,16 @@ async function getAccessToken(appId: string, appSecret: string): Promise<string>
       'X-CK-Nonce': nonce,
       'Authorization': `Sign ${signatureB64}`,
     },
-    body: JSON.stringify({
-      lang: 'en',
-      countryCode: '+34',
-      ts: timestamp,
-      version: 8,
-      appid: appId,
-    }),
+    body: bodyStr,
   });
-  
+
   const data = await response.json();
   console.log('Login response:', JSON.stringify(data));
-  
+
   if (data.error !== 0) {
     throw new Error(`Login failed: ${data.msg || 'Unknown error'}`);
   }
-  
+
   return data.data.at;
 }
 
