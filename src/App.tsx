@@ -22,6 +22,7 @@ import Enlaces from "./pages/Enlaces";
 import MonthlyTasks from "./pages/MonthlyTasks";
 import MonthlyTasksConfig from "./pages/MonthlyTasksConfig";
 import CategorizationRules from "./pages/CategorizationRules";
+import MonitorRed from "./pages/MonitorRed";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
