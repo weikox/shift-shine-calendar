@@ -306,6 +306,86 @@ export type Database = {
           },
         ]
       }
+      network_device_sessions: {
+        Row: {
+          created_at: string
+          device_id: string
+          ended_at: string | null
+          id: string
+          location: string | null
+          started_at: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          ended_at?: string | null
+          id?: string
+          location?: string | null
+          started_at?: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          ended_at?: string | null
+          id?: string
+          location?: string | null
+          started_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "network_device_sessions_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "network_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      network_devices: {
+        Row: {
+          created_at: string
+          first_seen: string
+          hostname: string | null
+          id: string
+          ip: string | null
+          is_online: boolean
+          label: string | null
+          last_seen: string
+          location: string | null
+          mac: string
+          updated_at: string
+          vendor: string | null
+        }
+        Insert: {
+          created_at?: string
+          first_seen?: string
+          hostname?: string | null
+          id?: string
+          ip?: string | null
+          is_online?: boolean
+          label?: string | null
+          last_seen?: string
+          location?: string | null
+          mac: string
+          updated_at?: string
+          vendor?: string | null
+        }
+        Update: {
+          created_at?: string
+          first_seen?: string
+          hostname?: string | null
+          id?: string
+          ip?: string | null
+          is_online?: boolean
+          label?: string | null
+          last_seen?: string
+          location?: string | null
+          mac?: string
+          updated_at?: string
+          vendor?: string | null
+        }
+        Relationships: []
+      }
       notes: {
         Row: {
           content: string | null

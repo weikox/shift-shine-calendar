@@ -22,6 +22,7 @@ import Enlaces from "./pages/Enlaces";
 import MonthlyTasks from "./pages/MonthlyTasks";
 import MonthlyTasksConfig from "./pages/MonthlyTasksConfig";
 import CategorizationRules from "./pages/CategorizationRules";
+import MonitorRed from "./pages/MonitorRed";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ const App = () => (
                   <Route path="/enlaces" element={<Enlaces />} />
                   <Route path="/tareas-mes" element={<MonthlyTasks />} />
                   <Route path="/tareas-mes/config" element={<MonthlyTasksConfig />} />
+                  <Route path="/monitor-red" element={<MonitorRed />} />
                   <Route path="/auth" element={<Auth />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
