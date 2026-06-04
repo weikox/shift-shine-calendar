@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Calendar, Wallet, StickyNote, Refrigerator, Home, BarChart3, LinkIcon, CheckSquare } from "lucide-react";
+import { Calendar, Wallet, StickyNote, Refrigerator, Home, BarChart3, LinkIcon, CheckSquare, Network } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCalendar } from "@/contexts/CalendarContext";
 import { useFinances } from "@/contexts/FinancesContext";
