@@ -162,6 +162,13 @@ export default function MonitorRed() {
     });
   }, [devices, locationFilter, mobileFilter]);
 
+  const ipKey = (ip: string | null) => {
+    if (!ip) return Number.MAX_SAFE_INTEGER;
+    const parts = ip.split(".").map((n) => parseInt(n, 10));
+    if (parts.length !== 4 || parts.some((n) => isNaN(n))) return Number.MAX_SAFE_INTEGER;
+    return (parts[0] << 24) + (parts[1] << 16) + (parts[2] << 8) + parts[3];
+  };
+
   const rows = useMemo(() => {
     return filtered
       .map((d) => {
@@ -170,7 +177,7 @@ export default function MonitorRed() {
         const segs = deviceSegments(sessions, d.id, from, to);
         return { device: d, up, pct, segs };
       })
-      .sort((a, b) => b.pct - a.pct);
+      .sort((a, b) => ipKey(a.device.ip) - ipKey(b.device.ip));
   }, [filtered, sessions, from, to]);
 
   const startEdit = (d: Device) => {
