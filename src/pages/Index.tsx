@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Calendar, Wallet, StickyNote, Refrigerator, Home, BarChart3, LinkIcon, CheckSquare } from "lucide-react";
+import { Calendar, Wallet, StickyNote, Refrigerator, Home, BarChart3, LinkIcon, CheckSquare, Network } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCalendar } from "@/contexts/CalendarContext";
 import { useFinances } from "@/contexts/FinancesContext";
@@ -232,6 +232,25 @@ const Index = () => {
               <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
                 <p className="text-[10px] md:text-sm text-muted-foreground">
                   Proveedores, bancos, seguros...
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link to="/monitor-red" className="group min-h-0">
+            <Card className="transition-all hover:shadow-lg hover:scale-105 h-full flex flex-col">
+              <CardHeader className="p-3 md:p-6 pb-1 md:pb-2 flex-1 min-h-0">
+                <div className="flex items-center gap-2">
+                  <Network className="h-6 w-6 md:h-8 md:w-8 text-primary shrink-0" />
+                  <CardTitle className="text-sm md:text-xl">Monitor Red</CardTitle>
+                </div>
+                <CardDescription className="text-[10px] md:text-sm hidden lg:block">
+                  Presencia de dispositivos
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
+                <p className="text-[10px] md:text-sm text-muted-foreground">
+                  Sedes y horarios
                 </p>
               </CardContent>
             </Card>
