@@ -359,13 +359,14 @@ export default function MonitorRed() {
               </p>
             ) : (
               <div className="space-y-4">
-                {rows.map(({ device, up, pct, segs }) => {
+                {rows.map(({ device, members, up, pct, segs, isOnline }) => {
                   const name = device.label ?? device.hostname ?? device.ip ?? device.mac;
+                  const macCount = members.length;
                   return (
-                    <div key={device.id} className="space-y-1">
+                    <div key={device.group_key || device.id} className="space-y-1">
                       <div className="flex items-center justify-between gap-2 text-sm">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
-                          {device.is_online ? (
+                          {isOnline ? (
                             <Wifi className="h-4 w-4 text-green-500 shrink-0" />
                           ) : (
                             <WifiOff className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -397,6 +398,11 @@ export default function MonitorRed() {
                               </button>
                               {device.is_mobile && (
                                 <Smartphone className="h-3 w-3 text-primary" />
+                              )}
+                              {macCount > 1 && (
+                                <Badge variant="secondary" className="text-[10px] py-0 px-1.5" title={members.map(m => m.mac).join("\n")}>
+                                  {macCount} MACs
+                                </Badge>
                               )}
                               {device.location && (
                                 <Badge variant="outline" className="text-[10px] py-0 px-1.5">
@@ -442,7 +448,7 @@ export default function MonitorRed() {
                         <span>24</span>
                       </div>
                       <div className="flex justify-between text-[10px] text-muted-foreground">
-                        <span className="font-mono">{device.ip ?? "—"} · {device.mac}</span>
+                        <span className="font-mono">{device.ip ?? "—"} · {device.mac}{macCount > 1 ? ` (+${macCount - 1})` : ""}</span>
                         <span>
                           {device.vendor ? device.vendor + " · " : ""}
                           visto hace {fmtRelative(device.last_seen)}
