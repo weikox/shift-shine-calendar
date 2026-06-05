@@ -167,7 +167,7 @@ export default function MonitorRed() {
     if (!ip) return Number.MAX_SAFE_INTEGER;
     const parts = ip.split(".").map((n) => parseInt(n, 10));
     if (parts.length !== 4 || parts.some((n) => isNaN(n))) return Number.MAX_SAFE_INTEGER;
-    return (parts[0] << 24) + (parts[1] << 16) + (parts[2] << 8) + parts[3];
+    return parts[0] * 16777216 + parts[1] * 65536 + parts[2] * 256 + parts[3];
   };
 
   const mergeSegments = (segs: { start: number; end: number }[]) => {
