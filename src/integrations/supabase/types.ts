@@ -345,6 +345,7 @@ export type Database = {
         Row: {
           created_at: string
           first_seen: string
+          group_key: string | null
           hostname: string | null
           id: string
           ip: string | null
@@ -360,6 +361,7 @@ export type Database = {
         Insert: {
           created_at?: string
           first_seen?: string
+          group_key?: string | null
           hostname?: string | null
           id?: string
           ip?: string | null
@@ -375,6 +377,7 @@ export type Database = {
         Update: {
           created_at?: string
           first_seen?: string
+          group_key?: string | null
           hostname?: string | null
           id?: string
           ip?: string | null
