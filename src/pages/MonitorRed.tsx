@@ -234,6 +234,31 @@ export default function MonitorRed() {
     else load();
   };
 
+  const toggleMobile = async (d: Device) => {
+    const { error } = await supabase
+      .from("network_devices")
+      .update({ is_mobile: !d.is_mobile })
+      .eq("id", d.id);
+    if (error) toast.error("Error: " + error.message);
+    else load();
+  };
+
+  const syncFing = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("fing-sync", {
+        body: { location: locationFilter !== "__all__" ? locationFilter : null },
+      });
+      if (error) throw error;
+      toast.success(`Fing: ${data?.updated ?? 0} actualizados, ${data?.grouped ?? 0} agrupados`);
+      await load();
+    } catch (e: any) {
+      toast.error("Error Fing: " + (e?.message ?? String(e)));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const shiftDay = (delta: number) => {
     const n = new Date(selectedDate);
     n.setDate(n.getDate() + delta);
