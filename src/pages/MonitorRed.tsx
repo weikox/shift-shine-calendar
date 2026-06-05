@@ -170,13 +170,39 @@ export default function MonitorRed() {
     return (parts[0] << 24) + (parts[1] << 16) + (parts[2] << 8) + parts[3];
   };
 
+  const mergeSegments = (segs: { start: number; end: number }[]) => {
+    if (segs.length === 0) return segs;
+    const sorted = [...segs].sort((a, b) => a.start - b.start);
+    const out: { start: number; end: number }[] = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+      const last = out[out.length - 1];
+      const s = sorted[i];
+      if (s.start <= last.end) last.end = Math.max(last.end, s.end);
+      else out.push(s);
+    }
+    return out;
+  };
+
   const rows = useMemo(() => {
-    return filtered
-      .map((d) => {
-        const up = uptimeMs(sessions, d.id, from, to);
+    // Agrupar por group_key (si existe), si no, cada dispositivo es su propio grupo
+    const groups = new Map<string, Device[]>();
+    for (const d of filtered) {
+      const k = d.group_key || `__id__:${d.id}`;
+      const arr = groups.get(k) ?? [];
+      arr.push(d);
+      groups.set(k, arr);
+    }
+    return Array.from(groups.values())
+      .map((members) => {
+        // representativo: el de IP más baja
+        const rep = [...members].sort((a, b) => ipKey(a.ip) - ipKey(b.ip))[0];
+        const allSegs: { start: number; end: number }[] = [];
+        for (const m of members) allSegs.push(...deviceSegments(sessions, m.id, from, to));
+        const segs = mergeSegments(allSegs);
+        const up = segs.reduce((acc, s) => acc + (s.end - s.start), 0);
         const pct = (up / DAY_MS) * 100;
-        const segs = deviceSegments(sessions, d.id, from, to);
-        return { device: d, up, pct, segs };
+        const isOnline = members.some((m) => m.is_online);
+        return { device: rep, members, up, pct, segs, isOnline };
       })
       .sort((a, b) => ipKey(a.device.ip) - ipKey(b.device.ip));
   }, [filtered, sessions, from, to]);
