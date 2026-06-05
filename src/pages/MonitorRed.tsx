@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Wifi, WifiOff, Pencil, Check, X, Calendar as CalendarIcon, Smartphone, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, RefreshCw, Wifi, WifiOff, Pencil, Check, X, Calendar as CalendarIcon, Smartphone, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ type Device = {
   last_seen: string;
   is_online: boolean;
   is_mobile: boolean;
+  group_key: string | null;
 };
 
 type Session = {
@@ -169,13 +170,39 @@ export default function MonitorRed() {
     return (parts[0] << 24) + (parts[1] << 16) + (parts[2] << 8) + parts[3];
   };
 
+  const mergeSegments = (segs: { start: number; end: number }[]) => {
+    if (segs.length === 0) return segs;
+    const sorted = [...segs].sort((a, b) => a.start - b.start);
+    const out: { start: number; end: number }[] = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+      const last = out[out.length - 1];
+      const s = sorted[i];
+      if (s.start <= last.end) last.end = Math.max(last.end, s.end);
+      else out.push(s);
+    }
+    return out;
+  };
+
   const rows = useMemo(() => {
-    return filtered
-      .map((d) => {
-        const up = uptimeMs(sessions, d.id, from, to);
+    // Agrupar por group_key (si existe), si no, cada dispositivo es su propio grupo
+    const groups = new Map<string, Device[]>();
+    for (const d of filtered) {
+      const k = d.group_key || `__id__:${d.id}`;
+      const arr = groups.get(k) ?? [];
+      arr.push(d);
+      groups.set(k, arr);
+    }
+    return Array.from(groups.values())
+      .map((members) => {
+        // representativo: el de IP más baja
+        const rep = [...members].sort((a, b) => ipKey(a.ip) - ipKey(b.ip))[0];
+        const allSegs: { start: number; end: number }[] = [];
+        for (const m of members) allSegs.push(...deviceSegments(sessions, m.id, from, to));
+        const segs = mergeSegments(allSegs);
+        const up = segs.reduce((acc, s) => acc + (s.end - s.start), 0);
         const pct = (up / DAY_MS) * 100;
-        const segs = deviceSegments(sessions, d.id, from, to);
-        return { device: d, up, pct, segs };
+        const isOnline = members.some((m) => m.is_online);
+        return { device: rep, members, up, pct, segs, isOnline };
       })
       .sort((a, b) => ipKey(a.device.ip) - ipKey(b.device.ip));
   }, [filtered, sessions, from, to]);
@@ -207,6 +234,23 @@ export default function MonitorRed() {
     else load();
   };
 
+
+  const syncFing = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("fing-sync", {
+        body: { location: locationFilter !== "__all__" ? locationFilter : null },
+      });
+      if (error) throw error;
+      toast.success(`Fing: ${data?.updated ?? 0} actualizados, ${data?.grouped ?? 0} agrupados`);
+      await load();
+    } catch (e: any) {
+      toast.error("Error Fing: " + (e?.message ?? String(e)));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const shiftDay = (delta: number) => {
     const n = new Date(selectedDate);
     n.setDate(n.getDate() + delta);
@@ -233,9 +277,14 @@ export default function MonitorRed() {
               </p>
             </div>
           </div>
-          <Button variant="outline" size="icon" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={syncFing} disabled={loading}>
+              <Download className="h-4 w-4 mr-1" /> Fing
+            </Button>
+            <Button variant="outline" size="icon" onClick={load} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
         </div>
 
         <Card className="mb-4">
@@ -310,13 +359,14 @@ export default function MonitorRed() {
               </p>
             ) : (
               <div className="space-y-4">
-                {rows.map(({ device, up, pct, segs }) => {
+                {rows.map(({ device, members, up, pct, segs, isOnline }) => {
                   const name = device.label ?? device.hostname ?? device.ip ?? device.mac;
+                  const macCount = members.length;
                   return (
-                    <div key={device.id} className="space-y-1">
+                    <div key={device.group_key || device.id} className="space-y-1">
                       <div className="flex items-center justify-between gap-2 text-sm">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
-                          {device.is_online ? (
+                          {isOnline ? (
                             <Wifi className="h-4 w-4 text-green-500 shrink-0" />
                           ) : (
                             <WifiOff className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -348,6 +398,11 @@ export default function MonitorRed() {
                               </button>
                               {device.is_mobile && (
                                 <Smartphone className="h-3 w-3 text-primary" />
+                              )}
+                              {macCount > 1 && (
+                                <Badge variant="secondary" className="text-[10px] py-0 px-1.5" title={members.map(m => m.mac).join("\n")}>
+                                  {macCount} MACs
+                                </Badge>
                               )}
                               {device.location && (
                                 <Badge variant="outline" className="text-[10px] py-0 px-1.5">
@@ -393,7 +448,7 @@ export default function MonitorRed() {
                         <span>24</span>
                       </div>
                       <div className="flex justify-between text-[10px] text-muted-foreground">
-                        <span className="font-mono">{device.ip ?? "—"} · {device.mac}</span>
+                        <span className="font-mono">{device.ip ?? "—"} · {device.mac}{macCount > 1 ? ` (+${macCount - 1})` : ""}</span>
                         <span>
                           {device.vendor ? device.vendor + " · " : ""}
                           visto hace {fmtRelative(device.last_seen)}
