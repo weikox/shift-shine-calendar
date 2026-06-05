@@ -234,14 +234,6 @@ export default function MonitorRed() {
     else load();
   };
 
-  const toggleMobile = async (d: Device) => {
-    const { error } = await supabase
-      .from("network_devices")
-      .update({ is_mobile: !d.is_mobile })
-      .eq("id", d.id);
-    if (error) toast.error("Error: " + error.message);
-    else load();
-  };
 
   const syncFing = async () => {
     setLoading(true);
