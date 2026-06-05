@@ -28,6 +28,7 @@ type Device = {
   last_seen: string;
   is_online: boolean;
   is_mobile: boolean;
+  group_key: string | null;
 };
 
 type Session = {
