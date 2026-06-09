@@ -189,12 +189,15 @@ export default function MonitorRed() {
 
   const filtered = useMemo(() => {
     return devices.filter((d) => {
+      if (!showArchived && d.is_archived) return false;
+      if (showArchived && !d.is_archived) return false;
       if (locationFilter !== "__all__" && (d.location ?? "") !== locationFilter) return false;
       if (mobileFilter === "mobile" && !d.is_mobile) return false;
       if (mobileFilter === "fixed" && d.is_mobile) return false;
       return true;
     });
-  }, [devices, locationFilter, mobileFilter]);
+  }, [devices, locationFilter, mobileFilter, showArchived]);
+
 
   const ipKey = (ip: string | null) => {
     if (!ip) return Number.MAX_SAFE_INTEGER;
