@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Wifi, WifiOff, Pencil, Check, X, Calendar as CalendarIcon, Smartphone, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { ArrowLeft, RefreshCw, Wifi, WifiOff, Pencil, Check, X, Calendar as CalendarIcon, Smartphone, ChevronLeft, ChevronRight, Download, Archive, ArchiveRestore } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,9 @@ type Device = {
   is_online: boolean;
   is_mobile: boolean;
   group_key: string | null;
+  is_archived?: boolean;
 };
+
 
 type Session = {
   id: string;
