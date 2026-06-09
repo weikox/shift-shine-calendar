@@ -392,8 +392,16 @@ export default function MonitorRed() {
                 <SelectItem value="fixed">Solo fijos</SelectItem>
               </SelectContent>
             </Select>
+
+            <div className="flex items-center gap-2 ml-auto">
+              <Switch id="show-archived" checked={showArchived} onCheckedChange={setShowArchived} />
+              <Label htmlFor="show-archived" className="text-xs cursor-pointer">
+                {showArchived ? "Viendo archivados" : "Ver archivados"}
+              </Label>
+            </div>
           </CardContent>
         </Card>
+
 
         <Card>
           <CardHeader>
