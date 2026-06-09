@@ -349,6 +349,7 @@ export type Database = {
           hostname: string | null
           id: string
           ip: string | null
+          is_archived: boolean
           is_mobile: boolean
           is_online: boolean
           label: string | null
@@ -365,6 +366,7 @@ export type Database = {
           hostname?: string | null
           id?: string
           ip?: string | null
+          is_archived?: boolean
           is_mobile?: boolean
           is_online?: boolean
           label?: string | null
@@ -381,6 +383,7 @@ export type Database = {
           hostname?: string | null
           id?: string
           ip?: string | null
+          is_archived?: boolean
           is_mobile?: boolean
           is_online?: boolean
           label?: string | null
