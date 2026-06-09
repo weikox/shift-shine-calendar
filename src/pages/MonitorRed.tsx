@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Wifi, WifiOff, Pencil, Check, X, Calendar as CalendarIcon, Smartphone, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { ArrowLeft, RefreshCw, Wifi, WifiOff, Pencil, Check, X, Calendar as CalendarIcon, Smartphone, ChevronLeft, ChevronRight, Download, Archive, ArchiveRestore } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,9 @@ type Device = {
   is_online: boolean;
   is_mobile: boolean;
   group_key: string | null;
+  is_archived?: boolean;
 };
+
 
 type Session = {
   id: string;
@@ -99,21 +101,25 @@ export default function MonitorRed() {
   const [mobileFilter, setMobileFilter] = useState<"all" | "mobile" | "fixed">("all");
   const [editing, setEditing] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [, setTick] = useState(0);
+  const loadTimer = useRef<number | null>(null);
+  const loadingRef = useRef(false);
+
 
   const from = startOfDay(selectedDate).getTime();
   const to = from + DAY_MS;
 
   const load = async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     try {
       const sinceIso = new Date(from).toISOString();
       const untilIso = new Date(to).toISOString();
-      // Paginate sessions to avoid Supabase's default 1000-row cap
       const pageSize = 1000;
       let all: Session[] = [];
       let offset = 0;
-      // Only sessions overlapping [from, to]: started before `to` AND (still open OR ended after `from`)
       while (true) {
         const { data, error } = await supabase
           .from("network_device_sessions")
@@ -127,7 +133,7 @@ export default function MonitorRed() {
         all = all.concat(batch);
         if (batch.length < pageSize) break;
         offset += pageSize;
-        if (offset > 50000) break; // safety
+        if (offset > 50000) break;
       }
       const d = await supabase
         .from("network_devices")
@@ -141,7 +147,17 @@ export default function MonitorRed() {
       toast.error("Error cargando datos: " + e.message);
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
+  };
+
+  // Debounced load: many realtime events coalesce into a single fetch
+  const scheduleLoad = () => {
+    if (loadTimer.current) window.clearTimeout(loadTimer.current);
+    loadTimer.current = window.setTimeout(() => {
+      loadTimer.current = null;
+      load();
+    }, 1500);
   };
 
   useEffect(() => {
@@ -153,15 +169,17 @@ export default function MonitorRed() {
     const tick = setInterval(() => setTick((t) => t + 1), 30_000);
     const ch = supabase
       .channel("network-monitor")
-      .on("postgres_changes", { event: "*", schema: "public", table: "network_devices" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "network_device_sessions" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "network_devices" }, scheduleLoad)
+      .on("postgres_changes", { event: "*", schema: "public", table: "network_device_sessions" }, scheduleLoad)
       .subscribe();
     return () => {
       clearInterval(tick);
+      if (loadTimer.current) window.clearTimeout(loadTimer.current);
       supabase.removeChannel(ch);
     };
      
   }, []);
+
 
   const locations = useMemo(() => {
     const set = new Set<string>();
@@ -171,12 +189,15 @@ export default function MonitorRed() {
 
   const filtered = useMemo(() => {
     return devices.filter((d) => {
+      if (!showArchived && d.is_archived) return false;
+      if (showArchived && !d.is_archived) return false;
       if (locationFilter !== "__all__" && (d.location ?? "") !== locationFilter) return false;
       if (mobileFilter === "mobile" && !d.is_mobile) return false;
       if (mobileFilter === "fixed" && d.is_mobile) return false;
       return true;
     });
-  }, [devices, locationFilter, mobileFilter]);
+  }, [devices, locationFilter, mobileFilter, showArchived]);
+
 
   const ipKey = (ip: string | null) => {
     if (!ip) return Number.MAX_SAFE_INTEGER;
@@ -265,6 +286,19 @@ export default function MonitorRed() {
       setLoading(false);
     }
   };
+
+  const archiveDevice = async (d: Device, archive: boolean) => {
+    const { error } = await supabase
+      .from("network_devices")
+      .update({ is_archived: archive })
+      .eq("id", d.id);
+    if (error) toast.error("Error: " + error.message);
+    else {
+      toast.success(archive ? "Dispositivo archivado" : "Restaurado");
+      load();
+    }
+  };
+
 
   const shiftDay = (delta: number) => {
     const n = new Date(selectedDate);
@@ -358,8 +392,16 @@ export default function MonitorRed() {
                 <SelectItem value="fixed">Solo fijos</SelectItem>
               </SelectContent>
             </Select>
+
+            <div className="flex items-center gap-2 ml-auto">
+              <Switch id="show-archived" checked={showArchived} onCheckedChange={setShowArchived} />
+              <Label htmlFor="show-archived" className="text-xs cursor-pointer">
+                {showArchived ? "Viendo archivados" : "Ver archivados"}
+              </Label>
+            </div>
           </CardContent>
         </Card>
+
 
         <Card>
           <CardHeader>
@@ -438,9 +480,17 @@ export default function MonitorRed() {
                               Móvil
                             </Label>
                           </div>
+                          <button
+                            onClick={() => archiveDevice(device, !device.is_archived)}
+                            className="text-muted-foreground hover:text-foreground"
+                            title={device.is_archived ? "Restaurar" : "Archivar (ya no existe)"}
+                          >
+                            {device.is_archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                          </button>
                           <span className="hidden sm:inline">{fmtDuration(up)}</span>
                           <span className="font-mono w-12 text-right">{pct.toFixed(1)}%</span>
                         </div>
+
                       </div>
                       <div className="relative h-4 w-full bg-muted rounded overflow-hidden">
                         {segs.map((s, i) => {
