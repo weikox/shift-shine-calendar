@@ -287,6 +287,19 @@ export default function MonitorRed() {
     }
   };
 
+  const archiveDevice = async (d: Device, archive: boolean) => {
+    const { error } = await supabase
+      .from("network_devices")
+      .update({ is_archived: archive })
+      .eq("id", d.id);
+    if (error) toast.error("Error: " + error.message);
+    else {
+      toast.success(archive ? "Dispositivo archivado" : "Restaurado");
+      load();
+    }
+  };
+
+
   const shiftDay = (delta: number) => {
     const n = new Date(selectedDate);
     n.setDate(n.getDate() + delta);
