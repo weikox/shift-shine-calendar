@@ -480,9 +480,17 @@ export default function MonitorRed() {
                               Móvil
                             </Label>
                           </div>
+                          <button
+                            onClick={() => archiveDevice(device, !device.is_archived)}
+                            className="text-muted-foreground hover:text-foreground"
+                            title={device.is_archived ? "Restaurar" : "Archivar (ya no existe)"}
+                          >
+                            {device.is_archived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                          </button>
                           <span className="hidden sm:inline">{fmtDuration(up)}</span>
                           <span className="font-mono w-12 text-right">{pct.toFixed(1)}%</span>
                         </div>
+
                       </div>
                       <div className="relative h-4 w-full bg-muted rounded overflow-hidden">
                         {segs.map((s, i) => {
