@@ -101,7 +101,11 @@ export default function MonitorRed() {
   const [mobileFilter, setMobileFilter] = useState<"all" | "mobile" | "fixed">("all");
   const [editing, setEditing] = useState<string | null>(null);
   const [editLabel, setEditLabel] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [, setTick] = useState(0);
+  const loadTimer = useRef<number | null>(null);
+  const loadingRef = useRef(false);
+
 
   const from = startOfDay(selectedDate).getTime();
   const to = from + DAY_MS;
