@@ -107,21 +107,36 @@ export default function MonitorRed() {
   const load = async () => {
     setLoading(true);
     try {
-      const sinceIso = new Date(from - DAY_MS).toISOString();
+      const sinceIso = new Date(from).toISOString();
       const untilIso = new Date(to).toISOString();
-      const [d, s] = await Promise.all([
-        supabase.from("network_devices").select("*").order("is_online", { ascending: false }).order("last_seen", { ascending: false }),
-        supabase
+      // Paginate sessions to avoid Supabase's default 1000-row cap
+      const pageSize = 1000;
+      let all: Session[] = [];
+      let offset = 0;
+      // Only sessions overlapping [from, to]: started before `to` AND (still open OR ended after `from`)
+      while (true) {
+        const { data, error } = await supabase
           .from("network_device_sessions")
           .select("id, device_id, started_at, ended_at")
-          .lte("started_at", untilIso)
+          .lt("started_at", untilIso)
           .or(`ended_at.is.null,ended_at.gte.${sinceIso}`)
-          .order("started_at", { ascending: true }),
-      ]);
+          .order("started_at", { ascending: true })
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        const batch = (data ?? []) as Session[];
+        all = all.concat(batch);
+        if (batch.length < pageSize) break;
+        offset += pageSize;
+        if (offset > 50000) break; // safety
+      }
+      const d = await supabase
+        .from("network_devices")
+        .select("*")
+        .order("is_online", { ascending: false })
+        .order("last_seen", { ascending: false });
       if (d.error) throw d.error;
-      if (s.error) throw s.error;
       setDevices((d.data ?? []) as Device[]);
-      setSessions((s.data ?? []) as Session[]);
+      setSessions(all);
     } catch (e: any) {
       toast.error("Error cargando datos: " + e.message);
     } finally {
