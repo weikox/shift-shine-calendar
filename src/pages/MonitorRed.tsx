@@ -111,15 +111,15 @@ export default function MonitorRed() {
   const to = from + DAY_MS;
 
   const load = async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     try {
       const sinceIso = new Date(from).toISOString();
       const untilIso = new Date(to).toISOString();
-      // Paginate sessions to avoid Supabase's default 1000-row cap
       const pageSize = 1000;
       let all: Session[] = [];
       let offset = 0;
-      // Only sessions overlapping [from, to]: started before `to` AND (still open OR ended after `from`)
       while (true) {
         const { data, error } = await supabase
           .from("network_device_sessions")
@@ -133,7 +133,7 @@ export default function MonitorRed() {
         all = all.concat(batch);
         if (batch.length < pageSize) break;
         offset += pageSize;
-        if (offset > 50000) break; // safety
+        if (offset > 50000) break;
       }
       const d = await supabase
         .from("network_devices")
@@ -147,7 +147,17 @@ export default function MonitorRed() {
       toast.error("Error cargando datos: " + e.message);
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
+  };
+
+  // Debounced load: many realtime events coalesce into a single fetch
+  const scheduleLoad = () => {
+    if (loadTimer.current) window.clearTimeout(loadTimer.current);
+    loadTimer.current = window.setTimeout(() => {
+      loadTimer.current = null;
+      load();
+    }, 1500);
   };
 
   useEffect(() => {
@@ -159,15 +169,17 @@ export default function MonitorRed() {
     const tick = setInterval(() => setTick((t) => t + 1), 30_000);
     const ch = supabase
       .channel("network-monitor")
-      .on("postgres_changes", { event: "*", schema: "public", table: "network_devices" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "network_device_sessions" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "network_devices" }, scheduleLoad)
+      .on("postgres_changes", { event: "*", schema: "public", table: "network_device_sessions" }, scheduleLoad)
       .subscribe();
     return () => {
       clearInterval(tick);
+      if (loadTimer.current) window.clearTimeout(loadTimer.current);
       supabase.removeChannel(ch);
     };
      
   }, []);
+
 
   const locations = useMemo(() => {
     const set = new Set<string>();
