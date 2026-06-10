@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw, Wifi, WifiOff, Pencil, Check, X, Calendar as CalendarIcon, Smartphone, ChevronLeft, ChevronRight, Download, Archive, ArchiveRestore } from "lucide-react";
 import { format } from "date-fns";
@@ -110,7 +110,7 @@ export default function MonitorRed() {
   const from = startOfDay(selectedDate).getTime();
   const to = from + DAY_MS;
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (loadingRef.current) return;
     loadingRef.current = true;
     setLoading(true);
@@ -149,21 +149,20 @@ export default function MonitorRed() {
       setLoading(false);
       loadingRef.current = false;
     }
-  };
+  }, [from, to]);
 
   // Debounced load: many realtime events coalesce into a single fetch
-  const scheduleLoad = () => {
+  const scheduleLoad = useCallback(() => {
     if (loadTimer.current) window.clearTimeout(loadTimer.current);
     loadTimer.current = window.setTimeout(() => {
       loadTimer.current = null;
       load();
     }, 1500);
-  };
+  }, [load]);
 
   useEffect(() => {
     load();
-     
-  }, [from, to]);
+  }, [load]);
 
   useEffect(() => {
     const tick = setInterval(() => setTick((t) => t + 1), 30_000);
@@ -177,8 +176,7 @@ export default function MonitorRed() {
       if (loadTimer.current) window.clearTimeout(loadTimer.current);
       supabase.removeChannel(ch);
     };
-     
-  }, []);
+  }, [scheduleLoad]);
 
 
   const locations = useMemo(() => {
