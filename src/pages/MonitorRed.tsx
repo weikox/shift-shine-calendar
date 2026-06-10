@@ -307,18 +307,17 @@ export default function MonitorRed() {
   const onlineCount = filtered.filter((d) => d.is_online).length;
   const isToday = startOfDay(new Date()).getTime() === from;
 
-  const hourTicks = Array.from({ length: 7 }, (_, i) => i * 4);
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6">
+    <div className="min-h-screen bg-background p-2 md:p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-6 gap-2 flex-wrap">
+        <div className="flex items-center justify-between mb-4 md:mb-6 gap-2 flex-wrap">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold">Monitor de red</h1>
+              <h1 className="text-xl md:text-3xl font-bold">Monitor de red</h1>
               <p className="text-xs text-muted-foreground">
                 {onlineCount} online / {filtered.length} dispositivos
               </p>
@@ -335,16 +334,16 @@ export default function MonitorRed() {
         </div>
 
         <Card className="mb-4">
-          <CardContent className="pt-4 flex flex-wrap items-center gap-3">
+          <CardContent className="pt-2 pb-2 flex flex-wrap items-center gap-2 md:gap-3">
             <div className="flex items-center gap-1">
               <Button variant="outline" size="icon" onClick={() => shiftDay(-1)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("min-w-[180px] justify-start text-left font-normal")}>
+                  <Button variant="outline" className={cn("min-w-[140px] md:min-w-[180px] justify-start text-left font-normal")}>
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {format(selectedDate, "EEEE d MMM yyyy", { locale: es })}
+                    {format(selectedDate, "d MMM yyyy", { locale: es })}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -369,7 +368,7 @@ export default function MonitorRed() {
             </div>
 
             <Select value={locationFilter} onValueChange={setLocationFilter}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-[130px] md:w-[160px]">
                 <SelectValue placeholder="Sede" />
               </SelectTrigger>
               <SelectContent>
@@ -381,7 +380,7 @@ export default function MonitorRed() {
             </Select>
 
             <Select value={mobileFilter} onValueChange={(v) => setMobileFilter(v as any)}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-[130px] md:w-[160px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -402,23 +401,18 @@ export default function MonitorRed() {
 
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              Presencia · {format(selectedDate, "d MMM yyyy", { locale: es })}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 md:p-6">
             {rows.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
                 Sin dispositivos para los filtros seleccionados.
               </p>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2 md:space-y-4">
                 {rows.map(({ device, members, up, pct, segs, isOnline }) => {
                   const name = device.label ?? device.hostname ?? device.ip ?? device.mac;
                   const macCount = members.length;
                   return (
-                    <div key={device.group_key || device.id} className="space-y-1">
+                    <div key={device.group_key || device.id} className="space-y-0.5">
                       <div className="flex items-center justify-between gap-2 text-sm">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           {isOnline ? (
@@ -467,14 +461,14 @@ export default function MonitorRed() {
                             </>
                           )}
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
+                        <div className="flex items-center gap-1 md:gap-3 text-xs text-muted-foreground shrink-0">
                           <div className="flex items-center gap-1.5">
                             <Switch
                               id={`mob-${device.id}`}
                               checked={device.is_mobile}
                               onCheckedChange={() => toggleMobile(device)}
                             />
-                            <Label htmlFor={`mob-${device.id}`} className="text-[10px] cursor-pointer">
+                            <Label htmlFor={`mob-${device.id}`} className="text-[10px] cursor-pointer hidden sm:inline">
                               Móvil
                             </Label>
                           </div>
@@ -490,7 +484,7 @@ export default function MonitorRed() {
                         </div>
 
                       </div>
-                      <div className="relative h-4 w-full bg-muted rounded overflow-hidden">
+                      <div className="relative h-2.5 md:h-4 w-full bg-muted rounded overflow-hidden">
                         {segs.map((s, i) => {
                           const left = ((s.start - from) / DAY_MS) * 100;
                           const width = ((s.end - s.start) / DAY_MS) * 100;
@@ -504,15 +498,15 @@ export default function MonitorRed() {
                           );
                         })}
                       </div>
-                      <div className="flex justify-between text-[10px] text-muted-foreground font-mono px-0.5">
-                        {hourTicks.map((h) => (
+                      <div className="flex justify-between text-[9px] md:text-[10px] text-muted-foreground font-mono px-0.5">
+                        {[0, 6, 12, 18].map((h) => (
                           <span key={h}>{String(h).padStart(2, "0")}</span>
                         ))}
                         <span>24</span>
                       </div>
-                      <div className="flex justify-between text-[10px] text-muted-foreground">
-                        <span className="font-mono">{device.ip ?? "—"} · {device.mac}{macCount > 1 ? ` (+${macCount - 1})` : ""}</span>
-                        <span>
+                      <div className="flex justify-between text-[9px] text-muted-foreground leading-tight">
+                        <span className="font-mono truncate max-w-[55%]">{device.ip ?? "—"} · {device.mac}{macCount > 1 ? ` (+${macCount - 1})` : ""}</span>
+                        <span className="truncate max-w-[45%] text-right">
                           {device.vendor ? device.vendor + " · " : ""}
                           visto hace {fmtRelative(device.last_seen)}
                         </span>
@@ -525,7 +519,7 @@ export default function MonitorRed() {
           </CardContent>
         </Card>
 
-        <Card className="mt-4">
+        <Card className="mt-4 hidden md:block">
           <CardHeader>
             <CardTitle className="text-base">Configuración del agente</CardTitle>
           </CardHeader>
