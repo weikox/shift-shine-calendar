@@ -49,6 +49,13 @@ All colors MUST be HSL.
     --holiday-foreground: 0 0% 100%;
     --weekend: 0 70% 96%;
 
+    /* Weather page colors */
+    --weather-sun: 45 95% 60%;
+    --weather-cloud: 220 10% 65%;
+    --weather-rain: 230 75% 55%;
+    --weather-weekend: 10 75% 55%;
+    --weather-night: 0 0% 8%;
+
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -98,6 +105,12 @@ All colors MUST be HSL.
     --holiday: 0 75% 55%;
     --holiday-foreground: 0 0% 100%;
     --weekend: 0 30% 20%;
+
+    --weather-sun: 45 90% 60%;
+    --weather-cloud: 220 10% 60%;
+    --weather-rain: 230 75% 60%;
+    --weather-weekend: 10 80% 60%;
+    --weather-night: 0 0% 0%;
 
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
