@@ -1,0 +1,1 @@
+ALTER TABLE public.network_devices ADD COLUMN IF NOT EXISTS is_mobile boolean NOT NULL DEFAULT false;

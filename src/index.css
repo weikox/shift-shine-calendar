@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 215 25% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    --primary: 195 85% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 195 75% 92%;
+    --secondary-foreground: 195 85% 25%;
+
+    --muted: 210 30% 94%;
+    --muted-foreground: 215 15% 50%;
+
+    --accent: 175 70% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 215 20% 88%;
+    --input: 215 20% 88%;
+    --ring: 195 85% 45%;
+
+    --radius: 0.75rem;
+
+    /* Calendar specific colors */
+    --shift-morning: 45 95% 60%;
+    --shift-morning-foreground: 45 90% 15%;
+    --shift-afternoon: 280 70% 65%;
+    --shift-afternoon-foreground: 280 90% 15%;
+    --day-off: 150 60% 55%;
+    --day-off-foreground: 150 90% 15%;
+    --holiday: 0 75% 55%;
+    --holiday-foreground: 0 0% 100%;
+    --weekend: 0 70% 96%;
+
+    /* Weather page colors */
+    --weather-sun: 45 95% 60%;
+    --weather-cloud: 220 10% 65%;
+    --weather-rain: 230 75% 55%;
+    --weather-weekend: 10 75% 55%;
+    --weather-night: 0 0% 8%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 215 30% 12%;
+    --foreground: 210 40% 98%;
+
+    --card: 215 25% 16%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 215 25% 16%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 195 85% 55%;
+    --primary-foreground: 215 30% 12%;
+
+    --secondary: 215 25% 22%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 215 25% 22%;
+    --muted-foreground: 215 15% 65%;
+
+    --accent: 175 70% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 215 20% 25%;
+    --input: 215 20% 25%;
+    --ring: 195 85% 55%;
+
+    /* Calendar specific colors - dark mode */
+    --shift-morning: 45 85% 55%;
+    --shift-morning-foreground: 45 90% 95%;
+    --shift-afternoon: 280 60% 60%;
+    --shift-afternoon-foreground: 280 90% 95%;
+    --day-off: 150 50% 50%;
+    --day-off-foreground: 150 90% 95%;
+    --holiday: 0 75% 55%;
+    --holiday-foreground: 0 0% 100%;
+    --weekend: 0 30% 20%;
+
+    --weather-sun: 45 90% 60%;
+    --weather-cloud: 220 10% 60%;
+    --weather-rain: 230 75% 60%;
+    --weather-weekend: 10 80% 60%;
+    --weather-night: 0 0% 0%;
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
