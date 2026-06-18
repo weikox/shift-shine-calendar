@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Wifi, WifiOff, Pencil, Check, X, Calendar as CalendarIcon, Smartphone, ChevronLeft, ChevronRight, Download, Archive, ArchiveRestore } from "lucide-react";
+import { ArrowLeft, RefreshCw, Wifi, WifiOff, Pencil, Check, X, Calendar as CalendarIcon, Smartphone, ChevronLeft, ChevronRight, Download, Archive, ArchiveRestore, Settings } from "lucide-react";
+import SedeConfigDialog, { type SedeConfig } from "@/components/SedeConfigDialog";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -105,6 +106,25 @@ export default function MonitorRed() {
   const [, setTick] = useState(0);
   const loadTimer = useRef<number | null>(null);
   const loadingRef = useRef(false);
+  const [sedeConfigs, setSedeConfigs] = useState<SedeConfig[]>([]);
+  const [configOpen, setConfigOpen] = useState(false);
+
+  const loadSedeConfigs = useCallback(async () => {
+    const { data, error } = await (supabase as any)
+      .from("network_sede_config")
+      .select("location, fing_url, microcut_seconds");
+    if (!error) setSedeConfigs((data ?? []) as SedeConfig[]);
+  }, []);
+
+  useEffect(() => {
+    loadSedeConfigs();
+  }, [loadSedeConfigs]);
+
+  const microcutByLocation = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of sedeConfigs) m.set(c.location, (c.microcut_seconds || 0) * 1000);
+    return m;
+  }, [sedeConfigs]);
 
 
   const from = startOfDay(selectedDate).getTime();
@@ -204,15 +224,15 @@ export default function MonitorRed() {
     return parts[0] * 16777216 + parts[1] * 65536 + parts[2] * 256 + parts[3];
   };
 
-  const mergeSegments = (segs: { start: number; end: number }[]) => {
+  const mergeSegments = (segs: { start: number; end: number }[], gapToleranceMs = 0) => {
     if (segs.length === 0) return segs;
     const sorted = [...segs].sort((a, b) => a.start - b.start);
-    const out: { start: number; end: number }[] = [sorted[0]];
+    const out: { start: number; end: number }[] = [{ ...sorted[0] }];
     for (let i = 1; i < sorted.length; i++) {
       const last = out[out.length - 1];
       const s = sorted[i];
-      if (s.start <= last.end) last.end = Math.max(last.end, s.end);
-      else out.push(s);
+      if (s.start - last.end <= gapToleranceMs) last.end = Math.max(last.end, s.end);
+      else out.push({ ...s });
     }
     return out;
   };
@@ -232,14 +252,15 @@ export default function MonitorRed() {
         const rep = [...members].sort((a, b) => ipKey(a.ip) - ipKey(b.ip))[0];
         const allSegs: { start: number; end: number }[] = [];
         for (const m of members) allSegs.push(...deviceSegments(sessions, m.id, from, to));
-        const segs = mergeSegments(allSegs);
+        const tolMs = microcutByLocation.get(rep.location ?? "") ?? 0;
+        const segs = mergeSegments(allSegs, tolMs);
         const up = segs.reduce((acc, s) => acc + (s.end - s.start), 0);
         const pct = (up / DAY_MS) * 100;
         const isOnline = members.some((m) => m.is_online);
         return { device: rep, members, up, pct, segs, isOnline };
       })
       .sort((a, b) => ipKey(a.device.ip) - ipKey(b.device.ip));
-  }, [filtered, sessions, from, to]);
+  }, [filtered, sessions, from, to, microcutByLocation]);
 
   const startEdit = (d: Device) => {
     setEditing(d.id);
@@ -272,8 +293,11 @@ export default function MonitorRed() {
   const syncFing = async () => {
     setLoading(true);
     try {
+      const isAll = locationFilter === "__all__";
       const { data, error } = await supabase.functions.invoke("fing-sync", {
-        body: { location: locationFilter !== "__all__" ? locationFilter : null },
+        body: isAll
+          ? { all: true }
+          : { location: locationFilter },
       });
       if (error) throw error;
       toast.success(`Fing: ${data?.updated ?? 0} actualizados, ${data?.grouped ?? 0} agrupados`);
@@ -327,11 +351,21 @@ export default function MonitorRed() {
             <Button variant="outline" size="sm" onClick={syncFing} disabled={loading}>
               <Download className="h-4 w-4 mr-1" /> Fing
             </Button>
+            <Button variant="outline" size="icon" onClick={() => setConfigOpen(true)} title="Configurar sedes">
+              <Settings className="h-4 w-4" />
+            </Button>
             <Button variant="outline" size="icon" onClick={load} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
           </div>
         </div>
+
+        <SedeConfigDialog
+          open={configOpen}
+          onOpenChange={setConfigOpen}
+          knownLocations={locations}
+          onSaved={loadSedeConfigs}
+        />
 
         <Card className="mb-4">
           <CardContent className="pt-2 pb-2 flex flex-wrap items-center gap-2 md:gap-3">
