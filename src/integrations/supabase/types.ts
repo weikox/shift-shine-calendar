@@ -14,7 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      network_sede_config: {
+        Row: {
+          created_at: string
+          fing_url: string | null
+          location: string
+          microcut_seconds: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fing_url?: string | null
+          location: string
+          microcut_seconds?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fing_url?: string | null
+          location?: string
+          microcut_seconds?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
