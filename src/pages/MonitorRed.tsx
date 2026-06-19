@@ -120,11 +120,11 @@ export default function MonitorRed() {
     loadSedeConfigs();
   }, [loadSedeConfigs]);
 
-  const microcutByLocation = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const c of sedeConfigs) m.set(c.location, (c.microcut_seconds || 0) * 1000);
-    return m;
+  const globalMicrocutMs = useMemo(() => {
+    const g = sedeConfigs.find((c) => c.location === "__global__");
+    return (g?.microcut_seconds || 0) * 1000;
   }, [sedeConfigs]);
+
 
 
   const from = startOfDay(selectedDate).getTime();
@@ -252,15 +252,15 @@ export default function MonitorRed() {
         const rep = [...members].sort((a, b) => ipKey(a.ip) - ipKey(b.ip))[0];
         const allSegs: { start: number; end: number }[] = [];
         for (const m of members) allSegs.push(...deviceSegments(sessions, m.id, from, to));
-        const tolMs = microcutByLocation.get(rep.location ?? "") ?? 0;
-        const segs = mergeSegments(allSegs, tolMs);
+        const segs = mergeSegments(allSegs, globalMicrocutMs);
         const up = segs.reduce((acc, s) => acc + (s.end - s.start), 0);
         const pct = (up / DAY_MS) * 100;
         const isOnline = members.some((m) => m.is_online);
         return { device: rep, members, up, pct, segs, isOnline };
       })
       .sort((a, b) => ipKey(a.device.ip) - ipKey(b.device.ip));
-  }, [filtered, sessions, from, to, microcutByLocation]);
+  }, [filtered, sessions, from, to, globalMicrocutMs]);
+
 
   const startEdit = (d: Device) => {
     setEditing(d.id);

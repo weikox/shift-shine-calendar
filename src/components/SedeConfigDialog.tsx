@@ -13,6 +13,8 @@ export type SedeConfig = {
   microcut_seconds: number;
 };
 
+const GLOBAL_KEY = "__global__";
+
 type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -22,6 +24,7 @@ type Props = {
 
 export default function SedeConfigDialog({ open, onOpenChange, knownLocations, onSaved }: Props) {
   const [rows, setRows] = useState<SedeConfig[]>([]);
+  const [microcutSeconds, setMicrocutSeconds] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -33,8 +36,10 @@ export default function SedeConfigDialog({ open, onOpenChange, knownLocations, o
         .select("location, fing_url, microcut_seconds")
         .order("location", { ascending: true });
       if (error) throw error;
-      const existing: SedeConfig[] = (data ?? []) as SedeConfig[];
-      // Asegurar que toda sede ya vista en network_devices aparece
+      const all: SedeConfig[] = (data ?? []) as SedeConfig[];
+      const global = all.find((r) => r.location === GLOBAL_KEY);
+      setMicrocutSeconds(global?.microcut_seconds ?? 0);
+      const existing = all.filter((r) => r.location !== GLOBAL_KEY);
       const map = new Map(existing.map((r) => [r.location, r]));
       for (const loc of knownLocations) {
         if (!map.has(loc)) {
@@ -80,13 +85,19 @@ export default function SedeConfigDialog({ open, onOpenChange, knownLocations, o
   const save = async () => {
     setSaving(true);
     try {
-      const valid = rows.filter((r) => r.location.trim());
+      const valid = rows.filter((r) => r.location.trim() && r.location !== GLOBAL_KEY);
       const payload = valid.map((r) => ({
         location: r.location.trim(),
         fing_url: r.fing_url?.trim() || null,
-        microcut_seconds: Math.max(0, Number(r.microcut_seconds) || 0),
+        microcut_seconds: 0,
         updated_at: new Date().toISOString(),
       }));
+      payload.push({
+        location: GLOBAL_KEY,
+        fing_url: null,
+        microcut_seconds: Math.max(0, Number(microcutSeconds) || 0),
+        updated_at: new Date().toISOString(),
+      });
       const { error } = await (supabase as any)
         .from("network_sede_config")
         .upsert(payload, { onConflict: "location" });
@@ -105,59 +116,63 @@ export default function SedeConfigDialog({ open, onOpenChange, knownLocations, o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Configuración de sedes (Fing)</DialogTitle>
+          <DialogTitle>Configuración del monitor de red</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Cargando…</p>
-          ) : rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No hay sedes. Añade una.</p>
-          ) : (
-            rows.map((row, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-2 items-end border rounded p-2">
-                <div className="col-span-12 md:col-span-3">
-                  <Label className="text-xs">Sede</Label>
-                  <Input
-                    value={row.location}
-                    onChange={(e) => updateRow(idx, { location: e.target.value })}
-                    placeholder="Casa, Oficina…"
-                  />
-                </div>
-                <div className="col-span-12 md:col-span-6">
-                  <Label className="text-xs">URL agente Fing</Label>
-                  <Input
-                    value={row.fing_url ?? ""}
-                    onChange={(e) => updateRow(idx, { fing_url: e.target.value })}
-                    placeholder="https://…/devices"
-                  />
-                </div>
-                <div className="col-span-8 md:col-span-2">
-                  <Label className="text-xs">Microcortes ≤ (s)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={row.microcut_seconds}
-                    onChange={(e) => updateRow(idx, { microcut_seconds: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="col-span-4 md:col-span-1 flex justify-end">
-                  <Button variant="ghost" size="icon" onClick={() => removeRow(idx)} title="Eliminar">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))
-          )}
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="border rounded p-3 space-y-1">
+            <Label className="text-sm font-medium">Umbral de microcortes (segundos)</Label>
+            <Input
+              type="number"
+              min={0}
+              value={microcutSeconds}
+              onChange={(e) => setMicrocutSeconds(Number(e.target.value))}
+              className="max-w-[160px]"
+            />
+            <p className="text-xs text-muted-foreground">
+              Oculta de la visualización los cortes cuya duración sea menor o igual a este valor,
+              uniendo los tramos online adyacentes. Se aplica a todas las sedes.
+            </p>
+          </div>
 
-          <Button variant="outline" size="sm" onClick={addRow}>
-            <Plus className="h-4 w-4 mr-1" /> Añadir sede
-          </Button>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Agentes Fing por sede</Label>
+            {loading ? (
+              <p className="text-sm text-muted-foreground">Cargando…</p>
+            ) : rows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hay sedes. Añade una.</p>
+            ) : (
+              rows.map((row, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-2 items-end border rounded p-2">
+                  <div className="col-span-12 md:col-span-4">
+                    <Label className="text-xs">Sede</Label>
+                    <Input
+                      value={row.location}
+                      onChange={(e) => updateRow(idx, { location: e.target.value })}
+                      placeholder="Casa, Oficina…"
+                    />
+                  </div>
+                  <div className="col-span-10 md:col-span-7">
+                    <Label className="text-xs">URL agente Fing</Label>
+                    <Input
+                      value={row.fing_url ?? ""}
+                      onChange={(e) => updateRow(idx, { fing_url: e.target.value })}
+                      placeholder="https://…/devices"
+                    />
+                  </div>
+                  <div className="col-span-2 md:col-span-1 flex justify-end">
+                    <Button variant="ghost" size="icon" onClick={() => removeRow(idx)} title="Eliminar">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
 
-          <p className="text-xs text-muted-foreground">
-            El umbral de microcortes oculta de la visualización los cortes cuya duración sea
-            menor o igual al valor indicado, uniendo los tramos online adyacentes.
-          </p>
+            <Button variant="outline" size="sm" onClick={addRow}>
+              <Plus className="h-4 w-4 mr-1" /> Añadir sede
+            </Button>
+          </div>
         </div>
 
         <DialogFooter>
